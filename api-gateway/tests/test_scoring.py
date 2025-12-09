@@ -166,7 +166,7 @@ async def participant_metrics(
     - competency_2: 6.00 (weight 0.30)
     - competency_3: 4.00 (weight 0.20)
 
-    Expected score: (8 * 0.50 + 6 * 0.30 + 4 * 0.20) * 10 = 64.00
+    Expected score: (8 * 0.50 + 6 * 0.30 + 4 * 0.20) * 10 = (4 + 1.8 + 0.8) * 10 = 66.00
     """
     metrics = [
         ParticipantMetric(
@@ -217,7 +217,7 @@ async def test_calculate_score_success(
     Test successful score calculation with correct formula.
 
     Formula: score_pct = Σ(value × weight) × 10
-    Expected: (8 * 0.50 + 6 * 0.30 + 4 * 0.20) * 10 = 64.00
+    Expected: (8 * 0.50 + 6 * 0.30 + 4 * 0.20) * 10 = (4 + 1.8 + 0.8) * 10 = 66.00
     """
     # Disable AI recommendations for this test to avoid Celery/network calls
     with patch("app.core.config.settings.ai_recommendations_enabled", False):
@@ -229,7 +229,7 @@ async def test_calculate_score_success(
         )
 
     # Verify score calculation
-    assert result["score_pct"] == Decimal("64.00")
+    assert result["score_pct"] == Decimal("66.00")
 
     # Verify result structure
     assert "scoring_result_id" in result
@@ -692,7 +692,7 @@ async def test_calculate_score_persists_to_database(
     assert saved_result is not None
     assert saved_result.participant_id == test_participant.id
     assert saved_result.weight_table_id == weight_table.id
-    assert saved_result.score_pct == Decimal("64.00")
+    assert saved_result.score_pct == Decimal("66.00")
     assert saved_result.strengths is not None
     assert saved_result.dev_areas is not None
 
@@ -734,7 +734,7 @@ async def test_api_calculate_score_success(
     assert data["participant_id"] == str(test_participant.id)
     assert data["prof_activity_code"] == developer_activity.code
     assert data["prof_activity_name"] == "Разработчик"
-    assert data["score_pct"] == "64.00"
+    assert data["score_pct"] == "66.00"
     assert data["weight_table_id"] == str(weight_table.id)
     assert data["missing_metrics"] == []
 
@@ -1212,4 +1212,4 @@ async def test_multiple_scoring_calculations_create_history(
 
     # All should have the same score (since metrics didn't change)
     for item in items:
-        assert item["score_pct"] == "64.00"
+        assert item["score_pct"] == "66.00"
