@@ -42,10 +42,10 @@
 
           <el-form-item label="Роль">
             <el-tag
-              :type="authStore.isAdmin ? 'danger' : 'info'"
+              :type="getRoleTagType(authStore.user?.role)"
               size="large"
             >
-              {{ authStore.isAdmin ? 'ADMIN' : 'USER' }}
+              {{ getRoleLabel(authStore.user?.role) }}
             </el-tag>
           </el-form-item>
 
@@ -70,6 +70,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores'
 import AppLayout from '@/components/AppLayout.vue'
+import { getRoleLabel, getRoleTagType } from '@/utils/labels'
 
 const authStore = useAuthStore()
 const formRef = ref(null)

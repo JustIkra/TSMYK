@@ -89,11 +89,11 @@
           />
           <el-table-column
             label="Роль"
-            width="120"
+            width="150"
           >
             <template #default="{ row }">
-              <el-tag :type="row.role === 'ADMIN' ? 'danger' : 'info'">
-                {{ row.role }}
+              <el-tag :type="getRoleTagType(row.role)">
+                {{ getRoleLabel(row.role) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -102,10 +102,8 @@
             width="140"
           >
             <template #default="{ row }">
-              <el-tag
-                :type="row.status === 'ACTIVE' ? 'success' : row.status === 'PENDING' ? 'warning' : 'info'"
-              >
-                {{ row.status }}
+              <el-tag :type="getStatusTagType(row.status)">
+                {{ getStatusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -170,6 +168,7 @@ import { computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AppLayout from '@/components/AppLayout.vue'
 import { useAdminStore, useAuthStore } from '@/stores'
+import { getRoleLabel, getRoleTagType, getStatusLabel, getStatusTagType } from '@/utils/labels'
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
