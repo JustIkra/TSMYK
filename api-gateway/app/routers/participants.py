@@ -217,11 +217,37 @@ async def get_final_report(
         return HTMLResponse(content=html_content)
 
     if format == "pdf":
+        import logging
         from app.services.report_template import render_final_report_html
         from app.services.pdf_generator import render_html_to_pdf
 
-        html_content = render_final_report_html(report_data)
-        pdf_bytes = render_html_to_pdf(html_content)
+        logger = logging.getLogger(__name__)
+
+        try:
+            html_content = render_final_report_html(report_data)
+        except Exception as e:
+            logger.exception("Failed to render HTML for PDF report")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to render report template: {e}",
+            ) from e
+
+        try:
+            pdf_bytes = render_html_to_pdf(html_content)
+        except OSError as e:
+            # WeasyPrint library loading issues
+            logger.exception("WeasyPrint library error during PDF generation")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="PDF generation unavailable: missing system libraries. Contact administrator.",
+            ) from e
+        except Exception as e:
+            logger.exception("Unexpected error during PDF generation")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"PDF generation failed: {e}",
+            ) from e
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

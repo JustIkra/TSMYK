@@ -17,6 +17,13 @@
                 Назад
               </el-button>
               <el-button
+                type="info"
+                @click="showMetricsDrawer = true"
+              >
+                <el-icon><DataLine /></el-icon>
+                Метрики
+              </el-button>
+              <el-button
                 type="primary"
                 @click="showScoringDialog = true"
               >
@@ -70,97 +77,6 @@
           @download="downloadReport"
           @delete="handleDeleteReport"
           @upload="showUploadDialog = true"
-        />
-      </el-card>
-
-      <!-- Participant Metrics Section -->
-      <el-card class="section-card">
-        <template #header>
-          <div class="section-header">
-            <h3>Актуальные метрики участника</h3>
-            <el-button
-              type="primary"
-              size="small"
-              @click="loadParticipantMetrics"
-            >
-              <el-icon><Refresh /></el-icon>
-              Обновить
-            </el-button>
-          </div>
-        </template>
-
-        <el-table
-          v-loading="loadingMetrics"
-          :data="participantMetrics"
-          stripe
-        >
-          <el-table-column
-            prop="metric_code"
-            label="Код метрики"
-            width="200"
-          />
-          <el-table-column
-            label="Название метрики"
-            min-width="250"
-          >
-            <template #default="{ row }">
-              {{ getMetricName(row.metric_code) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="value"
-            label="Значение"
-            width="120"
-          >
-            <template #default="{ row }">
-              <el-tag type="success">
-                {{ formatFromApi(row.value) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="confidence"
-            label="Уверенность"
-            width="150"
-          >
-            <template #default="{ row }">
-              <span
-                v-if="row.confidence !== null"
-                :style="{ color: getConfidenceColor(row.confidence) }"
-              >
-                {{ (row.confidence * 100).toFixed(0) }}%
-              </span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="updated_at"
-            label="Обновлено"
-            width="180"
-          >
-            <template #default="{ row }">
-              {{ formatDate(row.updated_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="last_source_report_id"
-            label="Источник"
-          >
-            <template #default="{ row }">
-              <el-tag
-                v-if="row.last_source_report_id"
-                size="small"
-              >
-                Из отчёта
-              </el-tag>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-empty
-          v-if="!participantMetrics.length && !loadingMetrics"
-          description="Метрики ещё не извлечены. Загрузите и обработайте отчёты."
         />
       </el-card>
 
@@ -245,16 +161,28 @@
                           class="recommendation-item"
                         >
                           <strong>{{ rec.title }}</strong>
-                          <div v-if="rec.skill_focus" class="recommendation-skill-focus">
+                          <div
+                            v-if="rec.skill_focus"
+                            class="recommendation-skill-focus"
+                          >
                             <strong>Навык:</strong> {{ rec.skill_focus }}
                           </div>
-                          <div v-if="rec.development_advice" class="recommendation-advice">
+                          <div
+                            v-if="rec.development_advice"
+                            class="recommendation-advice"
+                          >
                             {{ rec.development_advice }}
                           </div>
-                          <div v-if="rec.recommended_formats && rec.recommended_formats.length > 0" class="recommendation-formats">
+                          <div
+                            v-if="rec.recommended_formats && rec.recommended_formats.length > 0"
+                            class="recommendation-formats"
+                          >
                             <strong>Рекомендуемые форматы:</strong>
                             <ul class="formats-list">
-                              <li v-for="(format, fmtIdx) in rec.recommended_formats" :key="fmtIdx">
+                              <li
+                                v-for="(format, fmtIdx) in rec.recommended_formats"
+                                :key="fmtIdx"
+                              >
                                 {{ format }}
                               </li>
                             </ul>
@@ -434,6 +362,13 @@
           @metrics-updated="handleMetricsUpdated"
         />
       </el-dialog>
+
+      <!-- Participant Metrics Drawer -->
+      <ParticipantMetricsDrawer
+        v-model="showMetricsDrawer"
+        :participant-id="participant?.id"
+        :participant-name="participant?.full_name"
+      />
     </div>
   </app-layout>
 </template>
@@ -449,11 +384,13 @@ import {
   View,
   Delete,
   TrendCharts,
-  Refresh
+  Refresh,
+  DataLine
 } from '@element-plus/icons-vue'
 import AppLayout from '@/components/AppLayout.vue'
 import MetricsEditor from '@/components/MetricsEditor.vue'
 import ReportList from '@/components/ReportList.vue'
+import ParticipantMetricsDrawer from '@/components/ParticipantMetricsDrawer.vue'
 import { useParticipantsStore } from '@/stores'
 import { reportsApi, profActivitiesApi, scoringApi, participantsApi, metricsApi } from '@/api'
 import { formatFromApi } from '@/utils/numberFormat'
@@ -474,7 +411,6 @@ const participant = computed(() => participantsStore.currentParticipant)
 const reports = ref([])
 const scoringResults = ref([])
 const profActivities = ref([])
-const participantMetrics = ref([])
 const metricDefs = ref([])
 const currentMetrics = ref([])
 const currentReportId = ref(null)
@@ -495,6 +431,7 @@ const hasPendingRecommendations = computed(() => {
 const showUploadDialog = ref(false)
 const showScoringDialog = ref(false)
 const showMetricsDialog = ref(false)
+const showMetricsDrawer = ref(false)
 
 const uploadFormRef = ref(null)
 const fileList = ref([])
@@ -571,9 +508,9 @@ const getRecommendationStatusType = (status) => {
 }
 
 const getConfidenceColor = (confidence) => {
-  if (confidence >= 0.8) return 'var(--color-success)'
-  if (confidence >= 0.6) return 'var(--color-warning)'
-  return 'var(--color-danger)'
+  if (confidence >= 0.8) return 'var(--el-color-success)'
+  if (confidence >= 0.6) return 'var(--el-color-warning)'
+  return 'var(--el-color-danger)'
 }
 
 // Get metric name by code
@@ -679,27 +616,6 @@ const loadMetricDefs = async () => {
   }
 }
 
-// S2-08: Load participant metrics
-const loadParticipantMetrics = async ({ silent = false } = {}) => {
-  if (!silent) {
-    loadingMetrics.value = true
-  }
-  try {
-    const response = await participantsApi.getMetrics(route.params.id)
-    console.log('[DEBUG] loadParticipantMetrics response:', response)
-    console.log('[DEBUG] response.metrics length:', response.metrics?.length || 0)
-    participantMetrics.value = response.metrics || []
-    console.log('[DEBUG] participantMetrics.value length:', participantMetrics.value.length)
-  } catch (error) {
-    console.error('Error loading participant metrics:', error)
-    ElMessage.error('Ошибка загрузки метрик участника')
-  } finally {
-    if (!silent) {
-      loadingMetrics.value = false
-    }
-  }
-}
-
 // File upload
 const handleFileChange = (file) => {
   uploadForm.file = file.raw
@@ -725,8 +641,6 @@ const handleUpload = async () => {
       uploadForm.file = null
       fileList.value = []
       await loadReports()
-      // S2-08: Reload participant metrics after report upload
-      await loadParticipantMetrics()
     } catch (error) {
       ElMessage.error('Ошибка загрузки отчёта')
     } finally {
@@ -772,8 +686,6 @@ const startAutoRefresh = () => {
   refreshInterval.value = setInterval(async () => {
     try {
       await loadReports({ silent: true })
-      // S2-08: Also reload participant metrics to reflect newly extracted values
-      await loadParticipantMetrics({ silent: true })
     } catch (error) {
       console.error('Auto-refresh error:', error)
     }
@@ -831,8 +743,6 @@ const viewMetrics = async (reportId) => {
 
 const handleMetricsUpdated = async () => {
   ElMessage.success('Метрики обновлены')
-  // S2-08: Reload participant metrics after manual update
-  await loadParticipantMetrics()
 }
 
 const confirmDeleteReport = (report) => {
@@ -954,7 +864,6 @@ onMounted(async () => {
   await loadScoringResults()
   await loadProfActivities()
   await loadMetricDefs() // Load metric definitions for names
-  await loadParticipantMetrics() // S2-08: Load participant metrics
 })
 
 onUnmounted(() => {

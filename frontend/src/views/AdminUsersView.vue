@@ -124,10 +124,18 @@
             align="center"
           >
             <template #default="{ row }">
-              <div v-if="row.id === authStore.user?.id" class="actions-column">
-                <el-tag type="info">Это вы</el-tag>
+              <div
+                v-if="row.id === authStore.user?.id"
+                class="actions-column"
+              >
+                <el-tag type="info">
+                  Это вы
+                </el-tag>
               </div>
-              <div v-else class="actions-column">
+              <div
+                v-else
+                class="actions-column"
+              >
                 <el-button
                   v-if="row.role !== 'ADMIN'"
                   type="warning"

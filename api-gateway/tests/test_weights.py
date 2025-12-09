@@ -14,6 +14,7 @@ import uuid
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,31 +28,35 @@ pytestmark = pytest.mark.asyncio
 # Fixtures
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def prof_activity_developer(db_session: AsyncSession) -> ProfActivity:
     """Create a professional activity for testing."""
     repo = ProfActivityRepository(db_session)
+    # Use unique code to avoid conflicts between tests
+    unique_code = f"developer_{uuid.uuid4().hex[:8]}"
     activity = await repo.create(
-        code="developer",
+        code=unique_code,
         name="Software Developer",
         description="Professional activity for software development",
     )
     return activity
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def prof_activity_analyst(db_session: AsyncSession) -> ProfActivity:
     """Create another professional activity for filtering tests."""
     repo = ProfActivityRepository(db_session)
+    # Use unique code to avoid conflicts between tests
+    unique_code = f"analyst_{uuid.uuid4().hex[:8]}"
     activity = await repo.create(
-        code="analyst",
+        code=unique_code,
         name="Business Analyst",
         description="Professional activity for business analysis",
     )
     return activity
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def weight_table_developer(
     db_session: AsyncSession,
     prof_activity_developer: ProfActivity,
@@ -427,8 +432,8 @@ async def test_list_weight_tables_multiple(
 
     # Verify both activities are present
     codes = {item["prof_activity_code"] for item in data}
-    assert "developer" in codes
-    assert "analyst" in codes
+    assert prof_activity_developer.code in codes
+    assert prof_activity_analyst.code in codes
 
 
 async def test_list_weight_tables_filter_by_prof_activity(
@@ -462,13 +467,13 @@ async def test_list_weight_tables_filter_by_prof_activity(
     # Filter by developer
     response = await admin_client.get(
         "/api/weights",
-        params={"prof_activity_code": "developer"},
+        params={"prof_activity_code": prof_activity_developer.code},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["prof_activity_code"] == "developer"
+    assert data[0]["prof_activity_code"] == prof_activity_developer.code
 
 
 async def test_list_weight_tables_filter_invalid_activity(

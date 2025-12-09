@@ -45,9 +45,10 @@ from tests.conftest import get_auth_header
 @pytest_asyncio.fixture
 async def developer_activity(db_session: AsyncSession) -> ProfActivity:
     """Create a professional activity for testing."""
+    unique_code = f"developer_{uuid.uuid4().hex[:8]}"
     activity = ProfActivity(
-        id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
-        code="developer",
+        id=uuid.uuid4(),
+        code=unique_code,
         name="Разработчик",
         description="Test activity for scoring",
     )
@@ -211,7 +212,7 @@ async def test_calculate_score_success(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     # Verify score calculation
@@ -274,7 +275,7 @@ async def test_calculate_score_strengths_and_dev_areas(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     # Check strengths (should have highest value first)
@@ -312,7 +313,7 @@ async def test_calculate_score_missing_metrics(
     with pytest.raises(ValueError) as exc_info:
         await service.calculate_score(
             participant_id=test_participant.id,
-            prof_activity_code="developer",
+            prof_activity_code=developer_activity.code,
         )
 
     error_message = str(exc_info.value)
@@ -360,7 +361,7 @@ async def test_calculate_score_partially_missing_metrics(
     with pytest.raises(ValueError) as exc_info:
         await service.calculate_score(
             participant_id=test_participant.id,
-            prof_activity_code="developer",
+            prof_activity_code=developer_activity.code,
         )
 
     error_message = str(exc_info.value)
@@ -388,12 +389,12 @@ async def test_calculate_score_no_weight_table(
     with pytest.raises(ValueError) as exc_info:
         await service.calculate_score(
             participant_id=test_participant.id,
-            prof_activity_code="developer",
+            prof_activity_code=developer_activity.code,
         )
 
     error_message = str(exc_info.value)
     assert "No active weight table" in error_message
-    assert "developer" in error_message
+    assert developer_activity.code in error_message
 
 
 @pytest.mark.unit
@@ -451,7 +452,7 @@ async def test_calculate_score_invalid_weight_sum(
     with pytest.raises(ValueError) as exc_info:
         await service.calculate_score(
             participant_id=test_participant.id,
-            prof_activity_code="developer",
+            prof_activity_code=developer_activity.code,
         )
 
     error_message = str(exc_info.value)
@@ -504,7 +505,7 @@ async def test_calculate_score_value_out_of_range(
     with pytest.raises(ValueError) as exc_info:
         await service.calculate_score(
             participant_id=test_participant.id,
-            prof_activity_code="developer",
+            prof_activity_code=developer_activity.code,
         )
 
     error_message = str(exc_info.value)
@@ -556,7 +557,7 @@ async def test_calculate_score_edge_case_all_max_values(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     assert result["score_pct"] == Decimal("100.00")
@@ -606,7 +607,7 @@ async def test_calculate_score_edge_case_all_min_values(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     assert result["score_pct"] == Decimal("10.00")
@@ -629,7 +630,7 @@ async def test_calculate_score_persists_to_database(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     # Verify result was saved to database
@@ -666,7 +667,7 @@ async def test_api_calculate_score_success(
 
     response = await client.post(
         f"/api/scoring/participants/{test_participant.id}/calculate",
-        params={"activity_code": "developer"},
+        params={"activity_code": developer_activity.code},
         headers=headers,
     )
 
@@ -677,7 +678,7 @@ async def test_api_calculate_score_success(
     # Verify response structure
     assert "scoring_result_id" in data
     assert data["participant_id"] == str(test_participant.id)
-    assert data["prof_activity_code"] == "developer"
+    assert data["prof_activity_code"] == developer_activity.code
     assert data["prof_activity_name"] == "Разработчик"
     assert data["score_pct"] == "64.00"
     assert data["weight_table_id"] == str(weight_table.id)
@@ -709,7 +710,7 @@ async def test_api_calculate_score_missing_metrics(
     # No participant_metrics, so all are missing
     response = await client.post(
         f"/api/scoring/participants/{test_participant.id}/calculate",
-        params={"activity_code": "developer"},
+        params={"activity_code": developer_activity.code},
         headers=headers,
     )
 
@@ -738,7 +739,7 @@ async def test_api_calculate_score_no_weight_table(
     # No weight_table fixture, so none exists
     response = await client.post(
         f"/api/scoring/participants/{test_participant.id}/calculate",
-        params={"activity_code": "developer"},
+        params={"activity_code": developer_activity.code},
         headers=headers,
     )
 
@@ -769,7 +770,7 @@ async def test_api_calculate_score_invalid_participant(
 
     response = await client.post(
         f"/api/scoring/participants/{fake_participant_id}/calculate",
-        params={"activity_code": "developer"},
+        params={"activity_code": developer_activity.code},
         headers=headers,
     )
 
@@ -792,7 +793,7 @@ async def test_api_calculate_score_unauthorized(
     # No auth headers
     response = await client.post(
         f"/api/scoring/participants/{test_participant.id}/calculate",
-        params={"activity_code": "developer"},
+        params={"activity_code": developer_activity.code},
     )
 
     assert response.status_code == 401
@@ -853,7 +854,7 @@ async def test_api_get_scoring_history_success(
     # Verify first item (most recent)
     assert items[0]["id"] == str(result2.id)
     assert items[0]["participant_id"] == str(test_participant.id)
-    assert items[0]["prof_activity_code"] == "developer"
+    assert items[0]["prof_activity_code"] == developer_activity.code
     assert items[0]["score_pct"] == "82.00"
 
     # Verify second item (older)
@@ -1026,7 +1027,7 @@ async def test_strengths_and_dev_areas_max_five_items(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     # Verify max 5 items in each list
@@ -1096,7 +1097,7 @@ async def test_score_decimal_precision(
 
     result = await service.calculate_score(
         participant_id=test_participant.id,
-        prof_activity_code="developer",
+        prof_activity_code=developer_activity.code,
     )
 
     # Verify score has exactly 2 decimal places
@@ -1126,7 +1127,7 @@ async def test_multiple_scoring_calculations_create_history(
     for _ in range(3):
         response = await client.post(
             f"/api/scoring/participants/{test_participant.id}/calculate",
-            params={"activity_code": "developer"},
+            params={"activity_code": developer_activity.code},
             headers=headers,
         )
         assert response.status_code == 200

@@ -8,6 +8,7 @@ Provides:
 - Authentication helpers
 """
 
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -26,8 +27,34 @@ from app.db.models import User
 from app.db.session import get_db
 from app.services.auth import create_access_token, hash_password
 
-# Test database URL - use same DSN but tests run in transactions
-TEST_DATABASE_URL = settings.postgres_dsn
+# Test database URL - use POSTGRES_DSN_TEST if set, otherwise derive from settings
+# This allows running tests against a different database instance
+#
+# IMPORTANT: If running tests locally and you have both local PostgreSQL and Docker PostgreSQL
+# on port 5432, you need to either:
+# 1. Set POSTGRES_DSN_TEST to point to the correct instance, e.g.:
+#    export POSTGRES_DSN_TEST="postgresql+asyncpg://app:app@127.0.0.1:5432/app?ssl=disable"
+# 2. Stop your local PostgreSQL: brew services stop postgresql (macOS)
+# 3. Run tests inside Docker: docker exec -it tsmuk-app pytest tests/test_auth.py
+#
+TEST_DATABASE_URL = os.environ.get("POSTGRES_DSN_TEST")
+if not TEST_DATABASE_URL:
+    # Check if we're running inside Docker by looking for /.dockerenv
+    is_docker = os.path.exists("/.dockerenv")
+
+    if is_docker:
+        # Inside Docker, use the original DSN with 'postgres' host
+        TEST_DATABASE_URL = settings.postgres_dsn
+    else:
+        # Outside Docker (local dev), replace 'postgres' host with 127.0.0.1
+        # Note: 'localhost' may resolve to ::1 (IPv6) first, which might connect to local PostgreSQL
+        TEST_DATABASE_URL = settings.postgres_dsn.replace("@postgres:", "@127.0.0.1:")
+
+    # Disable SSL for testing
+    if "?" not in TEST_DATABASE_URL:
+        TEST_DATABASE_URL += "?ssl=disable"
+    elif "ssl=" not in TEST_DATABASE_URL:
+        TEST_DATABASE_URL += "&ssl=disable"
 
 
 @pytest_asyncio.fixture
@@ -119,7 +146,7 @@ async def admin_user(db_session: AsyncSession) -> User:
     """
     user = User(
         id=uuid.uuid4(),
-        email="admin@test.local",
+        email="admin@test.com",
         password_hash=hash_password("AdminPass123"),
         full_name="Test Admin",
         role="ADMIN",
@@ -143,7 +170,7 @@ async def active_user(db_session: AsyncSession) -> User:
     """
     user = User(
         id=uuid.uuid4(),
-        email="user@test.local",
+        email="user@test.com",
         password_hash=hash_password("UserPass123"),
         full_name="Test User",
         role="USER",
@@ -167,7 +194,7 @@ async def pending_user(db_session: AsyncSession) -> User:
     """
     user = User(
         id=uuid.uuid4(),
-        email="pending@test.local",
+        email="pending@test.com",
         password_hash=hash_password("PendingPass123"),
         full_name="Pending User",
         role="USER",
@@ -211,12 +238,28 @@ def get_auth_header(user: User) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture
-async def admin_client(client: AsyncClient, admin_user: User) -> AsyncClient:
+async def admin_client(client: AsyncClient, db_session: AsyncSession) -> AsyncClient:
     """
     Create a test client authenticated as admin.
 
     Sets the access_token cookie for all requests.
+    Note: Creates admin user inline to share db_session with client.
     """
+    # Create admin user in the same session used by client
+    admin_user = User(
+        id=uuid.uuid4(),
+        email="admin_client@test.com",  # Different email to avoid conflicts
+        password_hash=hash_password("AdminPass123"),
+        full_name="Test Admin",
+        role="ADMIN",
+        status="ACTIVE",
+        created_at=datetime.now(UTC),
+        approved_at=datetime.now(UTC),
+    )
+    db_session.add(admin_user)
+    await db_session.commit()
+    await db_session.refresh(admin_user)
+
     client.cookies.set("access_token", create_access_token(
         admin_user.id, admin_user.email, admin_user.role
     ))
@@ -224,12 +267,28 @@ async def admin_client(client: AsyncClient, admin_user: User) -> AsyncClient:
 
 
 @pytest_asyncio.fixture
-async def user_client(client: AsyncClient, active_user: User) -> AsyncClient:
+async def user_client(client: AsyncClient, db_session: AsyncSession) -> AsyncClient:
     """
     Create a test client authenticated as regular user.
 
     Sets the access_token cookie for all requests.
+    Note: Creates user inline to share db_session with client.
     """
+    # Create active user in the same session used by client
+    active_user = User(
+        id=uuid.uuid4(),
+        email="user_client@test.com",  # Different email to avoid conflicts
+        password_hash=hash_password("UserPass123"),
+        full_name="Test User",
+        role="USER",
+        status="ACTIVE",
+        created_at=datetime.now(UTC),
+        approved_at=datetime.now(UTC),
+    )
+    db_session.add(active_user)
+    await db_session.commit()
+    await db_session.refresh(active_user)
+
     client.cookies.set("access_token", create_access_token(
         active_user.id, active_user.email, active_user.role
     ))

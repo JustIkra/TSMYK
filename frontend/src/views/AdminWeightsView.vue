@@ -8,7 +8,11 @@
             <p>Каждая профессиональная область имеет свою уникальную весовую таблицу</p>
           </div>
           <div class="header-buttons">
-            <el-button @click="showProfActivityDialog" size="large" type="primary">
+            <el-button
+              size="large"
+              type="primary"
+              @click="showProfActivityDialog"
+            >
               <el-icon><FolderAdd /></el-icon>
               Новая область
             </el-button>
@@ -28,7 +32,10 @@
       </el-card>
 
       <!-- Группировка по профессиональным областям -->
-      <div v-loading="loading" class="areas-container">
+      <div
+        v-loading="loading"
+        class="areas-container"
+      >
         <!-- Error State -->
         <el-result
           v-if="error"
@@ -37,7 +44,10 @@
           :sub-title="error"
         >
           <template #extra>
-            <el-button type="primary" @click="loadData">
+            <el-button
+              type="primary"
+              @click="loadData"
+            >
               <el-icon><RefreshRight /></el-icon>
               Повторить
             </el-button>
@@ -49,42 +59,65 @@
           v-else-if="filteredAreas.length === 0 && !loading"
           description="Нет профессиональных областей"
         >
-          <el-button type="primary" @click="showProfActivityDialog">
+          <el-button
+            type="primary"
+            @click="showProfActivityDialog"
+          >
             <el-icon><FolderAdd /></el-icon>
             Создать первую область
           </el-button>
         </el-empty>
 
         <!-- Data Grid -->
-        <div v-else class="areas-grid">
+        <div
+          v-else
+          class="areas-grid"
+        >
           <div
             v-for="area in filteredAreas"
             :key="area.id"
             class="area-card-wrapper"
           >
-            <el-card class="area-card" shadow="hover">
+            <el-card
+              class="area-card"
+              shadow="hover"
+            >
               <template #header>
                 <div class="area-header">
                   <div class="area-title">
-                    <el-icon :size="24" class="icon-primary"><Folder /></el-icon>
+                    <el-icon
+                      :size="24"
+                      class="icon-primary"
+                    >
+                      <Folder />
+                    </el-icon>
                     <h3>{{ area.name }}</h3>
                   </div>
                   <el-button
                     size="small"
-                    @click="editProfActivity(area)"
                     circle
+                    @click="editProfActivity(area)"
                   >
                     <el-icon><Edit /></el-icon>
                   </el-button>
                 </div>
-                <div v-if="area.description" class="area-description">
+                <div
+                  v-if="area.description"
+                  class="area-description"
+                >
                   {{ area.description }}
                 </div>
               </template>
 
               <!-- Весовая таблица области -->
-              <div v-if="!area.weightTable" class="no-table">
-                <el-empty description="Весовая таблица не создана" :image-size="80">
+              <div
+                v-if="!area.weightTable"
+                class="no-table"
+              >
+                <el-empty
+                  description="Весовая таблица не создана"
+                  :image-size="80"
+                >
                   <el-button
                     type="primary"
                     @click="createTableForArea(area)"
@@ -95,11 +128,16 @@
                 </el-empty>
               </div>
 
-              <div v-else class="table-info">
+              <div
+                v-else
+                class="table-info"
+              >
                 <div class="table-stats">
                   <div class="stat-item">
                     <span class="stat-label">Компетенций:</span>
-                    <el-tag size="large">{{ area.weightTable.weights.length }}</el-tag>
+                    <el-tag size="large">
+                      {{ area.weightTable.weights.length }}
+                    </el-tag>
                   </div>
                   <div class="stat-item">
                     <span class="stat-label">Сумма весов:</span>
@@ -112,16 +150,24 @@
                   </div>
                   <div class="stat-item">
                     <span class="stat-label">Обновлена:</span>
-                    <el-text type="info">{{ formatDate(area.weightTable.created_at) }}</el-text>
+                    <el-text type="info">
+                      {{ formatDate(area.weightTable.created_at) }}
+                    </el-text>
                   </div>
                 </div>
 
                 <div class="table-actions">
-                  <el-button @click="viewDetails(area.weightTable)" type="info">
+                  <el-button
+                    type="info"
+                    @click="viewDetails(area.weightTable)"
+                  >
                     <el-icon><View /></el-icon>
                     Просмотр
                   </el-button>
-                  <el-button @click="editTable(area.weightTable)" type="primary">
+                  <el-button
+                    type="primary"
+                    @click="editTable(area.weightTable)"
+                  >
                     <el-icon><Edit /></el-icon>
                     Редактировать
                   </el-button>
@@ -141,25 +187,55 @@
       :close-on-click-modal="false"
       align-center
     >
-      <el-form :model="tableForm" label-width="200px" ref="formRef" label-position="top">
-        <el-form-item v-if="!editingTable" label="Профессиональная область" required>
-          <el-card shadow="never" class="area-display-card">
+      <el-form
+        ref="formRef"
+        :model="tableForm"
+        label-width="200px"
+        label-position="top"
+      >
+        <el-form-item
+          v-if="!editingTable"
+          label="Профессиональная область"
+          required
+        >
+          <el-card
+            shadow="never"
+            class="area-display-card"
+          >
             <div class="selected-area">
-              <el-icon :size="20" class="icon-primary"><Folder /></el-icon>
+              <el-icon
+                :size="20"
+                class="icon-primary"
+              >
+                <Folder />
+              </el-icon>
               <span class="area-name">{{ selectedActivityName }}</span>
             </div>
           </el-card>
         </el-form-item>
-        <el-form-item v-else label="Профессиональная область">
-          <el-card shadow="never" class="area-display-card">
+        <el-form-item
+          v-else
+          label="Профессиональная область"
+        >
+          <el-card
+            shadow="never"
+            class="area-display-card"
+          >
             <div class="selected-area">
-              <el-icon :size="20" class="icon-primary"><Folder /></el-icon>
+              <el-icon
+                :size="20"
+                class="icon-primary"
+              >
+                <Folder />
+              </el-icon>
               <span class="area-name">{{ selectedActivityName }}</span>
             </div>
           </el-card>
         </el-form-item>
 
-        <el-divider content-position="left">Компетенции и веса</el-divider>
+        <el-divider content-position="left">
+          Компетенции и веса
+        </el-divider>
 
         <div class="weights-editor">
           <!-- Индикатор суммы весов -->
@@ -223,9 +299,9 @@
           <el-button
             type="primary"
             plain
-            @click="addWeight"
             :icon="Plus"
             style="margin-top: 16px"
+            @click="addWeight"
           >
             Добавить компетенцию
           </el-button>
@@ -244,12 +320,14 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="tableDialogVisible = false">Отмена</el-button>
+        <el-button @click="tableDialogVisible = false">
+          Отмена
+        </el-button>
         <el-button
           type="primary"
-          @click="saveTable"
           :loading="saving"
           :disabled="!isValidWeightSum"
+          @click="saveTable"
         >
           {{ editingTable ? 'Сохранить' : 'Создать' }}
         </el-button>
@@ -264,16 +342,28 @@
       align-center
     >
       <div v-if="selectedTable">
-        <el-card shadow="never" class="table-summary-card">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="Профессиональная область" :span="2">
+        <el-card
+          shadow="never"
+          class="table-summary-card"
+        >
+          <el-descriptions
+            :column="2"
+            border
+          >
+            <el-descriptions-item
+              label="Профессиональная область"
+              :span="2"
+            >
               {{ selectedTable.prof_activity_name }}
             </el-descriptions-item>
             <el-descriptions-item label="Создана">
               {{ formatDate(selectedTable.created_at) }}
             </el-descriptions-item>
             <el-descriptions-item label="Сумма весов">
-              <el-tag :type="getWeightSumType(selectedTable)" size="large">
+              <el-tag
+                :type="getWeightSumType(selectedTable)"
+                size="large"
+              >
                 {{ calculateWeightSum(selectedTable).toFixed(4) }}
               </el-tag>
             </el-descriptions-item>
@@ -285,45 +375,90 @@
           Компетенции ({{ selectedTable.weights.length }})
         </el-divider>
 
-        <el-table :data="enrichedWeights(selectedTable.weights)" stripe max-height="500" size="large">
-          <el-table-column type="index" label="#" width="60" align="center" />
-          <el-table-column label="Метрика" min-width="250">
+        <el-table
+          :data="enrichedWeights(selectedTable.weights)"
+          stripe
+          max-height="500"
+          size="large"
+        >
+          <el-table-column
+            type="index"
+            label="#"
+            width="60"
+            align="center"
+          />
+          <el-table-column
+            label="Метрика"
+            min-width="250"
+          >
             <template #default="{ row }">
               <div class="metric-cell">
                 <strong>{{ row.metric_name }}</strong>
-                <br />
-                <el-text size="small" type="info">{{ row.metric_code }}</el-text>
+                <br>
+                <el-text
+                  size="small"
+                  type="info"
+                >
+                  {{ row.metric_code }}
+                </el-text>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="weight" label="Вес" width="140" align="center">
+          <el-table-column
+            prop="weight"
+            label="Вес"
+            width="140"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag size="large">{{ parseFloat(row.weight).toFixed(4) }}</el-tag>
+              <el-tag size="large">
+                {{ parseFloat(row.weight).toFixed(4) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="Процент" width="140" align="center">
+          <el-table-column
+            label="Процент"
+            width="140"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag type="info" size="large">
+              <el-tag
+                type="info"
+                size="large"
+              >
                 {{ (parseFloat(row.weight) * 100).toFixed(2) }}%
               </el-tag>
             </template>
           </el-table-column>
         </el-table>
 
-        <div v-if="selectedTable.metadata && selectedTable.metadata.description" style="margin-top: 20px">
-          <el-divider content-position="left">Описание</el-divider>
-          <el-card shadow="never" class="metadata-card">
+        <div
+          v-if="selectedTable.metadata && selectedTable.metadata.description"
+          style="margin-top: 20px"
+        >
+          <el-divider content-position="left">
+            Описание
+          </el-divider>
+          <el-card
+            shadow="never"
+            class="metadata-card"
+          >
             {{ selectedTable.metadata.description }}
           </el-card>
         </div>
       </div>
 
       <template #footer>
-        <el-button @click="detailsDialogVisible = false" size="large">Закрыть</el-button>
+        <el-button
+          size="large"
+          @click="detailsDialogVisible = false"
+        >
+          Закрыть
+        </el-button>
         <el-button
           type="primary"
-          @click="editTable(selectedTable)"
           size="large"
+          @click="editTable(selectedTable)"
         >
           <el-icon><Edit /></el-icon>
           Редактировать
@@ -337,15 +472,24 @@
       :title="editingProfActivity ? 'Редактировать область' : 'Создать область'"
       width="600px"
     >
-      <el-form :model="profActivityForm" label-width="120px">
-        <el-form-item label="Код" required>
+      <el-form
+        :model="profActivityForm"
+        label-width="120px"
+      >
+        <el-form-item
+          label="Код"
+          required
+        >
           <el-input
             v-model="profActivityForm.code"
             :disabled="!!editingProfActivity"
             placeholder="meeting_facilitation"
           />
         </el-form-item>
-        <el-form-item label="Название" required>
+        <el-form-item
+          label="Название"
+          required
+        >
           <el-input
             v-model="profActivityForm.name"
             placeholder="Проведение совещаний"
@@ -362,14 +506,20 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="profActivityDialogVisible = false">Отмена</el-button>
-        <el-button type="danger" v-if="editingProfActivity" @click="deleteProfActivity">
+        <el-button @click="profActivityDialogVisible = false">
+          Отмена
+        </el-button>
+        <el-button
+          v-if="editingProfActivity"
+          type="danger"
+          @click="deleteProfActivity"
+        >
           Удалить
         </el-button>
         <el-button
           type="primary"
-          @click="saveProfActivity"
           :loading="saving"
+          @click="saveProfActivity"
         >
           {{ editingProfActivity ? 'Сохранить' : 'Создать' }}
         </el-button>
