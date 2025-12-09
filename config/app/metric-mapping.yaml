@@ -1,0 +1,126 @@
+# Единый маппинг ярлыков метрик на коды MetricDef
+# Используется для связи извлечённых из документов названий с внутренними кодами метрик
+#
+# Структура:
+#   header_map:
+#     "<ЯРЛЫК В ВЕРХНЕМ РЕГИСТРЕ>": "<metric_code>"
+#
+# ВАЖНО:
+# - Ключи header_map должны быть в ВЕРХНЕМ РЕГИСТРЕ и соответствовать ярлыкам в документах
+# - Значения (metric_code) должны соответствовать MetricDef.code в БД
+# - Маппинг применяется ко всем типам отчётов без разделения
+# - Для синонимов (одинаковые метрики с разными названиями) указывается несколько ярлыков
+#   с одним metric_code (например: "СЕНЗИТИВНОСТЬ", "СЕНСИТИВНОСТЬ", "ЧУВСТВИТЕЛЬНОСТЬ" → sensitivity)
+
+header_map:
+  # Личностные характеристики
+  "АБСТРАКТНОСТЬ": "abstractness"
+  "АКТИВНОСТЬ": "activity"
+  "ЗАМКНУТОСТЬ": "introversion"
+  "ИМПУЛЬСИВНОСТЬ": "impulsiveness"
+  "ДРУЖЕЛЮБИЕ": "friendliness"
+  "КОНФЛИКТНОСТЬ": "conflict_prone"
+  "КОНФОРМИЗМ": "conformism"
+  "МОРАЛЬНАЯ ГИБКОСТЬ": "moral_flexibility"
+  "МОРАЛЬНОСТЬ": "morality"
+  "НЕДОВЕРЧИВОСТЬ": "distrust"
+  "НЕЗАВИСИМОСТЬ": "independence"
+  "НЕЧУВСТВИТЕЛЬНОСТЬ": "insensitivity"
+  "НОРМАТИВНОСТЬ": "normativeness"
+  "ОБЩИТЕЛЬНОСТЬ": "sociability"
+  "ОРГАНИЗОВАННОСТЬ": "organization"
+  "ПАССИВНОСТЬ": "passivity"
+  "ТРЕВОЖНОСТЬ": "anxiety"
+  "УРАВНОВЕШЕННОСТЬ": "emotional_stability"
+  "КОНКРЕТНОСТЬ": "concreteness"
+
+  # Синонимы для чувствительности
+  "СЕНЗИТИВНОСТЬ": "sensitivity"
+  "СЕНСИТИВНОСТЬ": "sensitivity"
+  "ЧУВСТВИТЕЛЬНОСТЬ": "sensitivity"
+
+  # Синонимы/опечатки для интеллектуальной сдержанности
+  "ИНТЕЛЛЕКТУАЛЬНАЯ СДЕРЖАННОСТЬ": "intellectual_restraint"
+  "ИНТЕЛЛЕКТУАЛЬНАЯ ОДЕРЖАННОСТЬ": "intellectual_restraint"
+  "ИНТЕЛЛЕКТУАЛЬНАЯ ОДАРЕННОСТЬ": "intellectual_giftedness"
+
+  # Командные роли
+  "АДМИНИСТРАТОР": "administrator"
+  "АНАЛИТИК": "analyst"
+  "ГЕНЕРАТОР ИДЕЙ": "idea_generator"
+  "ДУША КОМАНДЫ": "team_soul"
+  "ИНТЕГРАТОР": "integrator"
+  "ИССЛЕДОВАТЕЛЬ РЕСУРСОВ": "resource_investigator"
+  "КОНТРОЛЕР": "controller"
+  "КООРДИНАТОР": "coordinator"
+  "МОТИВАТОР": "motivator"
+  "ПРЕДПРИНИМАТЕЛЬ": "entrepreneur"
+  "ПРОИЗВОДИТЕЛЬ": "producer"
+  "РЕАЛИЗАТОР": "implementer"
+  "СПЕЦИАЛИСТ": "specialist"
+
+  # Профессиональные области
+  "АНАЛИЗ И ПЛАНИРОВАНИЕ": "analysis_planning"
+  "КОНТРОЛЬ, АУДИТ": "control_audit"
+  "ОБЕСПЕЧЕНИЕ ПРОЦЕССА": "process_support"
+  "ПОДДЕРЖКА": "support"
+  "ПРИНЯТИЕ РЕШЕНИЙ": "decision_making"
+  "ПРОДВИЖЕНИЕ": "promotion"
+  "РАБОТА С ДОКУМЕНТАМИ": "document_work"
+  "РАЗРАБОТКА": "development"
+
+  # Интеллектуальные способности
+  "ВЕРБАЛЬНАЯ ЛОГИКА": "verbal_logic"
+  "ВЫЧИСЛЕНИЯ": "calculations"
+  "ЛЕКСИКА": "vocabulary"
+  "НЕВЕРБАЛЬНАЯ ЛОГИКА": "nonverbal_logic"
+  "ОБРАБОТКА ИНФОРМАЦИИ": "information_processing"
+  "ОБЩИЙ БАЛЛ ИНТЕЛЛЕКТА": "general_intelligence"
+  "ПРОСТРАНСТВЕННОЕ МЫШЛЕНИЕ": "spatial_thinking"
+  "ЭРУДИЦИЯ": "erudition"
+
+  # Мотивация
+  "ВНЕШНЯЯ МОТИВАЦИЯ": "external_motivation"
+  "ВНУТРЕННЯЯ МОТИВАЦИЯ": "internal_motivation"
+  "ДЕНЬГИ": "money_motivation"
+  "ЗДОРОВЬЕ": "health_motivation"
+  "ИНТЕРЕС": "interest_motivation"
+  "МОТИВАЦИЯ ДОСТИЖЕНИЙ": "achievement_motivation"
+  "ПРИЗНАНИЕ": "recognition_motivation"
+  # Примечание: "ПРОДВИЖЕНИЕ" как мотивация отличается от "ПРОДВИЖЕНИЕ" как профобласти
+  # В старой конфигурации было два разных кода: promotion и advancement_motivation
+  # Оставляем advancement_motivation для мотивационного контекста
+  "СВЯЗИ": "connections_motivation"
+  "СЛУЖЕНИЕ ОБЩЕСТВУ": "public_service_motivation"
+  "СТРЕМЛЕНИЕ К САМОРАЗВИТИЮ": "self_development_motivation"
+  "ТРАДИЦИИ": "traditions_motivation"
+  "ПОМОЩЬ ЛЮДЯМ": "helping_people_motivation"
+
+  # Компетенции и навыки
+  "ВКЛЮЧЕННОСТЬ В КОМАНДУ": "team_engagement"
+  "ИННОВАЦИОННОСТЬ": "innovativeness"
+  "КОМАНДНОСТЬ": "teamwork"
+  "КОММУНИКАБЕЛЬНОСТЬ": "communication_skills"
+  "КОМПЛЕКСНОЕ РЕШЕНИЕ ПРОБЛЕМ": "complex_problem_solving"
+  "ЛИДЕРСТВО": "leadership"
+  "ЛЮБОЗНАТЕЛЬНОСТЬ": "curiosity"
+  "ОБЩЕНИЕ": "communication"
+  "ОРИГИНАЛЬНОСТЬ": "originality"
+  "ОРИЕНТАЦИЯ НА КЛИЕНТА": "client_orientation"
+  "ОТВЕТСТВЕННОСТЬ": "responsibility"
+  "ПРОИЗВОДСТВО И ТЕХНОЛОГИИ": "production_technology"
+  "РУКОВОДСТВО": "management"
+  "СТРЕССОУСТОЙЧИВОСТЬ": "stress_resistance"
+  "ТВОРЧЕСТВО": "creativity"
+  "ТРАДИЦИОННОСТЬ": "traditionality"
+
+  # Управленческие компетенции
+  "СИСТЕМНОЕ МЫШЛЕНИЕ": "systems_thinking"
+  "ВЛИЯНИЕ": "influence"
+  "ДЕЛЕГИРОВАНИЕ": "delegation"
+  "ПРИНЯТИЕ УПРАВЛЕНЧЕСКИХ РЕШЕНИЙ": "management_decision_making"
+  "КОНТРОЛЬ": "control"
+  "ОРГАНИЗАЦИЯ РАБОТЫ": "work_organization"
+  "ДЕЛОВАЯ КОММУНИКАЦИЯ": "business_communication"
+  "МОТИВАЦИЯ К РУКОВОДСТВУ": "management_motivation"
+  "ПОТЕНЦИАЛ К РУКОВОДСТВУ": "management_potential"

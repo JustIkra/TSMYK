@@ -1,0 +1,219 @@
+/**
+ * Theme tokens for CMUK - Digital Competency Model
+ * Modern design system compatible with Element Plus
+ * Palette: Professional Indigo with Amber accents
+ */
+
+:root {
+  /* Primary Colors - Deep Indigo */
+  --color-primary: #4F46E5;
+  --color-primary-dark: #4338CA;
+  --color-primary-darker: #3730A3;
+  --color-primary-light: #818CF8;
+  --color-primary-lighter: #C7D2FE;
+  --color-primary-bg: #EEF2FF;
+
+  /* Secondary/Accent - Amber */
+  --color-accent: #F59E0B;
+  --color-accent-dark: #D97706;
+  --color-accent-light: #FCD34D;
+
+  /* Semantic Colors */
+  --color-info: #3B82F6;
+  --color-info-light: #DBEAFE;
+  --color-success: #10B981;
+  --color-success-light: #D1FAE5;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #EF4444;
+  --color-danger-light: #FEE2E2;
+
+  /* Grayscale - Slate */
+  --color-gray-900: #0F172A;
+  --color-gray-800: #1E293B;
+  --color-gray-700: #334155;
+  --color-gray-600: #475569;
+  --color-gray-500: #64748B;
+  --color-gray-400: #94A3B8;
+  --color-gray-300: #CBD5E1;
+  --color-gray-200: #E2E8F0;
+  --color-gray-100: #F1F5F9;
+  --color-gray-50: #F8FAFC;
+
+  /* Text Colors */
+  --color-text-primary: #0F172A;
+  --color-text-regular: #334155;
+  --color-text-secondary: #64748B;
+  --color-text-placeholder: #94A3B8;
+  --color-text-inverse: #FFFFFF;
+
+  /* Border Colors */
+  --color-border: #CBD5E1;
+  --color-border-light: #E2E8F0;
+  --color-border-lighter: #F1F5F9;
+  --color-border-extra-light: #F8FAFC;
+
+  /* Background Colors */
+  --color-bg-page: #F8FAFC;
+  --color-bg-section: #F1F5F9;
+  --color-bg-overlay: #FFFFFF;
+  --color-bg-hover: #F1F5F9;
+
+  /* Focus */
+  --color-focus: #4F46E5;
+  --color-focus-ring: rgba(79, 70, 229, 0.25);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+  --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  --gradient-hero: linear-gradient(135deg, #4F46E5 0%, #6366F1 50%, #4338CA 100%);
+
+  /* Typography */
+  --font-family-base: 'Segoe UI', Tahoma, Arial, -apple-system, system-ui, sans-serif;
+  --font-size-base: 14px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+
+  /* Font Sizes - Headings */
+  --font-size-h1: 20px;
+  --font-size-h2: 18px;
+  --font-size-h3: 16px;
+
+  /* Line Heights */
+  --line-height-base: 1.5;
+  --line-height-tight: 1.25;
+  --line-height-relaxed: 1.75;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+
+  /* Border Radius */
+  --border-radius-base: 4px;
+  --border-radius-sm: 2px;
+  --border-radius-lg: 8px;
+  --border-radius-circle: 50%;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.18);
+
+  /* Z-Index */
+  --z-index-dropdown: 1000;
+  --z-index-sticky: 1020;
+  --z-index-fixed: 1030;
+  --z-index-modal-backdrop: 1040;
+  --z-index-modal: 1050;
+  --z-index-popover: 1060;
+  --z-index-tooltip: 1070;
+
+  /* Transitions */
+  --transition-base: all 0.3s ease;
+  --transition-fast: all 0.15s ease;
+  --transition-slow: all 0.5s ease;
+
+  /* Component Specific */
+  --header-height: 64px;
+  --sidebar-width: 240px;
+  --table-row-height: 44px;
+  --button-height-default: 32px;
+  --button-height-small: 24px;
+  --button-height-large: 40px;
+  --input-height-default: 32px;
+}
+
+/* Element Plus Variable Overrides */
+:root {
+  /* Primary Colors */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-1: var(--color-primary-light);
+  --el-color-primary-light-2: var(--color-primary-light);
+  --el-color-primary-light-3: var(--color-primary-lighter);
+  --el-color-primary-light-4: var(--color-primary-lighter);
+  --el-color-primary-light-5: var(--color-primary-lighter);
+  --el-color-primary-light-7: var(--color-primary-bg);
+  --el-color-primary-light-8: var(--color-primary-bg);
+  --el-color-primary-light-9: var(--color-primary-bg);
+  --el-color-primary-dark-2: var(--color-primary-dark);
+
+  /* Semantic Colors */
+  --el-color-success: var(--color-success);
+  --el-color-success-light-9: var(--color-success-light);
+  --el-color-warning: var(--color-warning);
+  --el-color-warning-light-9: var(--color-warning-light);
+  --el-color-danger: var(--color-danger);
+  --el-color-danger-light-9: var(--color-danger-light);
+  --el-color-info: var(--color-info);
+  --el-color-info-light-9: var(--color-info-light);
+
+  /* Typography */
+  --el-font-size-base: var(--font-size-base);
+  --el-font-family: var(--font-family-base);
+
+  /* Border */
+  --el-border-radius-base: var(--border-radius-base);
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border-light);
+  --el-border-color-lighter: var(--color-border-lighter);
+  --el-border-color-extra-light: var(--color-border-extra-light);
+
+  /* Text Colors */
+  --el-text-color-primary: var(--color-text-primary);
+  --el-text-color-regular: var(--color-text-regular);
+  --el-text-color-secondary: var(--color-text-secondary);
+  --el-text-color-placeholder: var(--color-text-placeholder);
+
+  /* Background */
+  --el-bg-color: var(--color-bg-overlay);
+  --el-bg-color-page: var(--color-bg-page);
+  --el-bg-color-overlay: var(--color-bg-overlay);
+
+  /* Fill Colors */
+  --el-fill-color: var(--color-gray-100);
+  --el-fill-color-light: var(--color-gray-50);
+  --el-fill-color-lighter: var(--color-bg-page);
+  --el-fill-color-blank: var(--color-bg-overlay);
+
+  /* Shadows */
+  --el-box-shadow: var(--shadow-base);
+  --el-box-shadow-light: var(--shadow-sm);
+  --el-box-shadow-lighter: var(--shadow-sm);
+  --el-box-shadow-dark: var(--shadow-lg);
+
+  /* Transitions */
+  --el-transition-duration: 0.3s;
+  --el-transition-duration-fast: 0.15s;
+}
+
+/* Accessibility - Focus Visible */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Custom utility classes for the new palette */
+.bg-primary-gradient {
+  background: var(--gradient-primary);
+}
+
+.bg-hero-gradient {
+  background: var(--gradient-hero);
+}
+
+.text-primary {
+  color: var(--color-primary);
+}
+
+.text-accent {
+  color: var(--color-accent);
+}

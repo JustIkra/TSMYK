@@ -6,3 +6,5 @@ CLAUDE.md
 .task
 .mcp.json
 .claude
+open_vpn.ovpn
+seed.spec.ts
