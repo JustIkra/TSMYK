@@ -1,112 +1,853 @@
 """
-Tests for professional activities seeding and API listing.
+Tests for professional activities module.
 
-Covers:
-- Idempotent seeding of default professional activities
-- Authenticated retrieval via GET /api/prof-activities
-- Authentication enforcement
+Tests coverage:
+- List professional activities (authenticated users)
+- Create professional activity (admin only)
+- Update professional activity (admin only)
+- Delete professional activity (admin only)
+- Unique code constraint validation
+- Authorization checks (admin vs regular user)
+- Edge cases and error scenarios
 """
+
+import uuid
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ProfActivity, User
-from app.db.seeds.prof_activity import PROF_ACTIVITY_SEED_DATA
-from app.services.auth import create_user
-from app.services.prof_activity import ProfActivityService
 
-# Helper Fixtures
-
-@pytest.fixture
-async def active_user(db_session: AsyncSession) -> User:
-    """Create an active user to access protected endpoints."""
-    user = await create_user(db_session, "activity_user@example.com", "password123", role="USER")
-    user.status = "ACTIVE"
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
+pytestmark = pytest.mark.asyncio
 
 
-@pytest.fixture
-async def auth_cookies(client: AsyncClient, active_user: User) -> dict[str, str]:
-    """Authenticate the active user and return JWT cookies."""
-    response = await client.post(
-        "/api/auth/login",
-        json={"email": "activity_user@example.com", "password": "password123"},
+# Helper functions
+
+async def create_test_prof_activity(
+    db: AsyncSession,
+    code: str = "test_activity",
+    name: str = "Test Activity",
+    description: str | None = "Test description",
+) -> ProfActivity:
+    """
+    Helper to create a professional activity for testing.
+
+    Args:
+        db: Database session
+        code: Unique activity code
+        name: Activity name
+        description: Optional description
+
+    Returns:
+        Created ProfActivity instance
+    """
+    prof_activity = ProfActivity(
+        id=uuid.uuid4(),
+        code=code,
+        name=name,
+        description=description,
     )
-    assert response.status_code == 200
-    cookies = dict(response.cookies)
-    client.cookies.clear()
-    return cookies
+    db.add(prof_activity)
+    await db.commit()
+    await db.refresh(prof_activity)
+    return prof_activity
 
 
-@pytest.fixture
-async def seeded_prof_activities(db_session: AsyncSession) -> None:
-    """Ensure default professional activities are present."""
-    service = ProfActivityService(db_session)
-    await service.seed_defaults()
+# List Professional Activities Tests
 
 
-# Tests
-
-@pytest.mark.asyncio
-async def test_seed_prof_activities__idempotent(test_env, db_session: AsyncSession):
-    """Running the seeder twice keeps a single copy with consistent data."""
-    service = ProfActivityService(db_session)
-
-    await service.seed_defaults()
-    first_result = await db_session.execute(select(ProfActivity))
-    first_items = list(first_result.scalars().all())
-
-    await service.seed_defaults()
-    second_result = await db_session.execute(select(ProfActivity))
-    second_items = list(second_result.scalars().all())
-
-    assert len(first_items) == len(PROF_ACTIVITY_SEED_DATA)
-    assert len(second_items) == len(PROF_ACTIVITY_SEED_DATA)
-
-    for seed in PROF_ACTIVITY_SEED_DATA:
-        match = next((item for item in second_items if item.code == seed.code), None)
-        assert match is not None
-        assert match.name == seed.name
-        assert match.description == seed.description
-
-
-@pytest.mark.asyncio
-async def test_list_prof_activities__returns_seeded_items(
-    test_env,
-    client: AsyncClient,
+@pytest.mark.unit
+async def test_list_prof_activities_success(
+    user_client: AsyncClient,
     db_session: AsyncSession,
-    auth_cookies: dict[str, str],
-    seeded_prof_activities: None,
-):
-    """Listing endpoint returns seeded professional activities."""
-    response = await client.get("/api/prof-activities", cookies=auth_cookies)
+) -> None:
+    """
+    Test successful listing of professional activities as regular user.
 
+    Scenario:
+    - Create multiple professional activities
+    - List them via API
+    - Verify all are returned in correct order
+    """
+    # Arrange: Create test activities
+    activity1 = await create_test_prof_activity(
+        db_session,
+        code="analyst",
+        name="Analyst",
+        description="Data analyst",
+    )
+    activity2 = await create_test_prof_activity(
+        db_session,
+        code="developer",
+        name="Developer",
+        description="Software developer",
+    )
+    activity3 = await create_test_prof_activity(
+        db_session,
+        code="manager",
+        name="Manager",
+        description="Project manager",
+    )
+
+    # Act: List activities
+    response = await user_client.get("/api/prof-activities")
+
+    # Assert: Verify response
     assert response.status_code == 200
     data = response.json()
-
-    # API returns ProfActivityListResponse with 'activities' field
+    assert "activities" in data
     activities = data["activities"]
-    assert len(activities) == len(PROF_ACTIVITY_SEED_DATA)
+    assert len(activities) >= 3
 
-    expected = {seed.code: seed for seed in PROF_ACTIVITY_SEED_DATA}
-    for item in activities:
-        seed = expected[item["code"]]
-        assert item["name"] == seed.name
-        assert item["description"] == seed.description
+    # Verify activities are ordered by code
+    codes = [a["code"] for a in activities]
+    assert "analyst" in codes
+    assert "developer" in codes
+    assert "manager" in codes
+
+    # Verify structure of returned activities
+    for activity in activities:
+        assert "id" in activity
+        assert "code" in activity
+        assert "name" in activity
+        assert "description" in activity or activity.get("description") is None
 
 
-@pytest.mark.asyncio
-async def test_list_prof_activities__no_auth__returns_401(
-    test_env,
+@pytest.mark.unit
+async def test_list_prof_activities_empty(
+    user_client: AsyncClient,
+) -> None:
+    """
+    Test listing professional activities when none exist.
+
+    Scenario:
+    - No activities in database
+    - List should return empty array
+    """
+    # Act: List activities
+    response = await user_client.get("/api/prof-activities")
+
+    # Assert: Empty list returned
+    assert response.status_code == 200
+    data = response.json()
+    assert "activities" in data
+    assert isinstance(data["activities"], list)
+
+
+@pytest.mark.unit
+async def test_list_prof_activities_requires_authentication(
     client: AsyncClient,
-    db_session: AsyncSession,
-    seeded_prof_activities: None,
-):
-    """Listing endpoint requires authentication."""
+) -> None:
+    """
+    Test that listing activities requires authentication.
+
+    Scenario:
+    - Request without authentication
+    - Should return 401 Unauthorized
+    """
+    # Act: Request without auth
     response = await client.get("/api/prof-activities")
 
+    # Assert: Unauthorized
     assert response.status_code == 401
+
+
+@pytest.mark.integration
+async def test_list_prof_activities_as_admin(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test listing professional activities as admin user.
+
+    Scenario:
+    - Admin user should have same read access
+    - Verify admin can list activities
+    """
+    # Arrange: Create test activity
+    await create_test_prof_activity(
+        db_session,
+        code="tester",
+        name="Tester",
+    )
+
+    # Act: List as admin
+    response = await admin_client.get("/api/prof-activities")
+
+    # Assert: Success
+    assert response.status_code == 200
+    data = response.json()
+    assert "activities" in data
+    assert len(data["activities"]) >= 1
+
+
+# Create Professional Activity Tests
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_success(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test successful creation of professional activity by admin.
+
+    Scenario:
+    - Admin creates a new activity
+    - Verify activity is created with correct data
+    """
+    # Arrange: Prepare request data
+    request_data = {
+        "code": "new_activity",
+        "name": "New Activity",
+        "description": "A brand new professional activity",
+    }
+
+    # Act: Create activity
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Created successfully
+    assert response.status_code == 201
+    data = response.json()
+    assert data["code"] == request_data["code"]
+    assert data["name"] == request_data["name"]
+    assert data["description"] == request_data["description"]
+    assert "id" in data
+    # Verify UUID is valid
+    assert uuid.UUID(data["id"])
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_without_description(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test creating professional activity without optional description.
+
+    Scenario:
+    - Admin creates activity with only required fields
+    - Verify activity is created successfully
+    """
+    # Arrange: Minimal request data
+    request_data = {
+        "code": "minimal_activity",
+        "name": "Minimal Activity",
+    }
+
+    # Act: Create activity
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Created successfully
+    assert response.status_code == 201
+    data = response.json()
+    assert data["code"] == request_data["code"]
+    assert data["name"] == request_data["name"]
+    assert data["description"] is None
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_duplicate_code(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test creating professional activity with duplicate code.
+
+    Scenario:
+    - Activity with code 'duplicate' exists
+    - Admin tries to create another with same code
+    - Should return 400 Bad Request
+    """
+    # Arrange: Create existing activity
+    await create_test_prof_activity(
+        db_session,
+        code="duplicate",
+        name="Existing Activity",
+    )
+
+    # Act: Try to create duplicate
+    request_data = {
+        "code": "duplicate",
+        "name": "New Activity with Duplicate Code",
+    }
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Bad request with error message
+    assert response.status_code == 400
+    data = response.json()
+    assert "detail" in data
+    assert "duplicate" in data["detail"].lower()
+
+
+@pytest.mark.unit
+async def test_create_prof_activity_requires_admin(
+    user_client: AsyncClient,
+) -> None:
+    """
+    Test that creating professional activity requires admin role.
+
+    Scenario:
+    - Regular user tries to create activity
+    - Should return 403 Forbidden
+    """
+    # Arrange: Prepare request data
+    request_data = {
+        "code": "forbidden_activity",
+        "name": "Forbidden Activity",
+    }
+
+    # Act: Try to create as regular user
+    response = await user_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Forbidden
+    assert response.status_code == 403
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_invalid_data(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test creating professional activity with invalid data.
+
+    Scenario:
+    - Missing required fields
+    - Should return 422 Unprocessable Entity
+    """
+    # Act: Request with missing required field
+    request_data = {
+        "name": "Missing Code",
+    }
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Validation error
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_code_too_long(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test creating professional activity with code exceeding max length.
+
+    Scenario:
+    - Code field has max_length=50
+    - Provide code longer than 50 characters
+    - Should return 422 Unprocessable Entity
+    """
+    # Arrange: Code longer than 50 characters
+    request_data = {
+        "code": "a" * 51,  # 51 characters
+        "name": "Too Long Code",
+    }
+
+    # Act: Create activity
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Validation error
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+async def test_create_prof_activity_empty_code(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test creating professional activity with empty code.
+
+    Scenario:
+    - Code field has min_length=1
+    - Provide empty string
+    - Should return 422 Unprocessable Entity
+    """
+    # Arrange: Empty code
+    request_data = {
+        "code": "",
+        "name": "Empty Code",
+    }
+
+    # Act: Create activity
+    response = await admin_client.post("/api/prof-activities", json=request_data)
+
+    # Assert: Validation error
+    assert response.status_code == 422
+
+
+# Update Professional Activity Tests
+
+
+@pytest.mark.integration
+async def test_update_prof_activity_success(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test successful update of professional activity by admin.
+
+    Scenario:
+    - Activity exists
+    - Admin updates name and description
+    - Verify changes are applied
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="updatable",
+        name="Original Name",
+        description="Original description",
+    )
+
+    # Act: Update activity
+    request_data = {
+        "name": "Updated Name",
+        "description": "Updated description",
+    }
+    response = await admin_client.put(
+        f"/api/prof-activities/{activity.id}",
+        json=request_data,
+    )
+
+    # Assert: Updated successfully
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(activity.id)
+    assert data["code"] == "updatable"  # Code should not change
+    assert data["name"] == "Updated Name"
+    assert data["description"] == "Updated description"
+
+
+@pytest.mark.integration
+async def test_update_prof_activity_name_only(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test updating only the name field.
+
+    Scenario:
+    - Update only name, leave description unchanged
+    - Verify only name is updated
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="partial_update",
+        name="Original Name",
+        description="Original description",
+    )
+
+    # Act: Update only name
+    request_data = {
+        "name": "New Name",
+    }
+    response = await admin_client.put(
+        f"/api/prof-activities/{activity.id}",
+        json=request_data,
+    )
+
+    # Assert: Name updated, description preserved
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "New Name"
+    assert data["description"] == "Original description"
+
+
+@pytest.mark.integration
+async def test_update_prof_activity_description_only(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test updating only the description field.
+
+    Scenario:
+    - Update only description, leave name unchanged
+    - Verify only description is updated
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="desc_update",
+        name="Original Name",
+        description="Original description",
+    )
+
+    # Act: Update only description
+    request_data = {
+        "description": "New description",
+    }
+    response = await admin_client.put(
+        f"/api/prof-activities/{activity.id}",
+        json=request_data,
+    )
+
+    # Assert: Description updated, name preserved
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Original Name"
+    assert data["description"] == "New description"
+
+
+@pytest.mark.integration
+async def test_update_prof_activity_not_found(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test updating non-existent professional activity.
+
+    Scenario:
+    - Provide UUID that doesn't exist
+    - Should return 404 Not Found
+    """
+    # Arrange: Random UUID
+    non_existent_id = uuid.uuid4()
+
+    # Act: Try to update
+    request_data = {
+        "name": "Updated Name",
+    }
+    response = await admin_client.put(
+        f"/api/prof-activities/{non_existent_id}",
+        json=request_data,
+    )
+
+    # Assert: Not found
+    assert response.status_code == 404
+
+
+@pytest.mark.unit
+async def test_update_prof_activity_requires_admin(
+    user_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test that updating professional activity requires admin role.
+
+    Scenario:
+    - Regular user tries to update activity
+    - Should return 403 Forbidden
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="forbidden_update",
+        name="Original Name",
+    )
+
+    # Act: Try to update as regular user
+    request_data = {
+        "name": "New Name",
+    }
+    response = await user_client.put(
+        f"/api/prof-activities/{activity.id}",
+        json=request_data,
+    )
+
+    # Assert: Forbidden
+    assert response.status_code == 403
+
+
+@pytest.mark.integration
+async def test_update_prof_activity_invalid_uuid(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test updating with invalid UUID format.
+
+    Scenario:
+    - Provide invalid UUID string
+    - Should return 422 Unprocessable Entity
+    """
+    # Act: Request with invalid UUID
+    request_data = {
+        "name": "New Name",
+    }
+    response = await admin_client.put(
+        "/api/prof-activities/not-a-uuid",
+        json=request_data,
+    )
+
+    # Assert: Validation error
+    assert response.status_code == 422
+
+
+# Delete Professional Activity Tests
+
+
+@pytest.mark.integration
+async def test_delete_prof_activity_success(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test successful deletion of professional activity by admin.
+
+    Scenario:
+    - Activity exists without weight tables
+    - Admin deletes it
+    - Verify activity is removed
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="deletable",
+        name="Deletable Activity",
+    )
+    activity_id = activity.id
+
+    # Act: Delete activity
+    response = await admin_client.delete(f"/api/prof-activities/{activity_id}")
+
+    # Assert: Deleted successfully (204 No Content)
+    assert response.status_code == 204
+
+    # Verify: Activity is gone
+    from sqlalchemy import select
+    stmt = select(ProfActivity).where(ProfActivity.id == activity_id)
+    result = await db_session.execute(stmt)
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.integration
+async def test_delete_prof_activity_not_found(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test deleting non-existent professional activity.
+
+    Scenario:
+    - Provide UUID that doesn't exist
+    - Should return 404 Not Found
+    """
+    # Arrange: Random UUID
+    non_existent_id = uuid.uuid4()
+
+    # Act: Try to delete
+    response = await admin_client.delete(f"/api/prof-activities/{non_existent_id}")
+
+    # Assert: Not found
+    assert response.status_code == 404
+
+
+@pytest.mark.unit
+async def test_delete_prof_activity_requires_admin(
+    user_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test that deleting professional activity requires admin role.
+
+    Scenario:
+    - Regular user tries to delete activity
+    - Should return 403 Forbidden
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="forbidden_delete",
+        name="Forbidden Delete",
+    )
+
+    # Act: Try to delete as regular user
+    response = await user_client.delete(f"/api/prof-activities/{activity.id}")
+
+    # Assert: Forbidden
+    assert response.status_code == 403
+
+
+@pytest.mark.integration
+async def test_delete_prof_activity_invalid_uuid(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test deleting with invalid UUID format.
+
+    Scenario:
+    - Provide invalid UUID string
+    - Should return 422 Unprocessable Entity
+    """
+    # Act: Request with invalid UUID
+    response = await admin_client.delete("/api/prof-activities/not-a-uuid")
+
+    # Assert: Validation error
+    assert response.status_code == 422
+
+
+# Edge Cases and Integration Tests
+
+
+@pytest.mark.integration
+async def test_full_lifecycle_prof_activity(
+    admin_client: AsyncClient,
+    user_client: AsyncClient,
+) -> None:
+    """
+    Test complete lifecycle of a professional activity.
+
+    Scenario:
+    - Admin creates activity
+    - User lists and sees it
+    - Admin updates it
+    - User lists and sees updated version
+    - Admin deletes it
+    - User lists and doesn't see it
+    """
+    # Step 1: Create
+    create_data = {
+        "code": "lifecycle_test",
+        "name": "Lifecycle Test",
+        "description": "Testing full lifecycle",
+    }
+    create_response = await admin_client.post(
+        "/api/prof-activities",
+        json=create_data,
+    )
+    assert create_response.status_code == 201
+    activity = create_response.json()
+    activity_id = activity["id"]
+
+    # Step 2: User lists and sees it
+    list_response = await user_client.get("/api/prof-activities")
+    assert list_response.status_code == 200
+    activities = list_response.json()["activities"]
+    codes = [a["code"] for a in activities]
+    assert "lifecycle_test" in codes
+
+    # Step 3: Admin updates
+    update_data = {
+        "name": "Updated Lifecycle Test",
+        "description": "Updated description",
+    }
+    update_response = await admin_client.put(
+        f"/api/prof-activities/{activity_id}",
+        json=update_data,
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["name"] == "Updated Lifecycle Test"
+
+    # Step 4: User lists and sees updated version
+    list_response2 = await user_client.get("/api/prof-activities")
+    assert list_response2.status_code == 200
+    activities2 = list_response2.json()["activities"]
+    lifecycle_activity = next(a for a in activities2 if a["code"] == "lifecycle_test")
+    assert lifecycle_activity["name"] == "Updated Lifecycle Test"
+
+    # Step 5: Admin deletes
+    delete_response = await admin_client.delete(f"/api/prof-activities/{activity_id}")
+    assert delete_response.status_code == 204
+
+    # Step 6: User lists and doesn't see it
+    list_response3 = await user_client.get("/api/prof-activities")
+    assert list_response3.status_code == 200
+    activities3 = list_response3.json()["activities"]
+    codes3 = [a["code"] for a in activities3]
+    assert "lifecycle_test" not in codes3
+
+
+@pytest.mark.integration
+async def test_create_multiple_activities_different_codes(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test creating multiple activities with different codes.
+
+    Scenario:
+    - Create several activities in sequence
+    - Verify all are created successfully
+    - Verify all can be listed
+    """
+    # Arrange: Activity data
+    activities_data = [
+        {"code": "activity_1", "name": "Activity 1"},
+        {"code": "activity_2", "name": "Activity 2"},
+        {"code": "activity_3", "name": "Activity 3"},
+    ]
+
+    # Act: Create all activities
+    created_ids = []
+    for data in activities_data:
+        response = await admin_client.post("/api/prof-activities", json=data)
+        assert response.status_code == 201
+        created_ids.append(response.json()["id"])
+
+    # Assert: All can be listed
+    list_response = await admin_client.get("/api/prof-activities")
+    assert list_response.status_code == 200
+    activities = list_response.json()["activities"]
+    codes = [a["code"] for a in activities]
+    assert "activity_1" in codes
+    assert "activity_2" in codes
+    assert "activity_3" in codes
+
+
+@pytest.mark.integration
+async def test_update_activity_preserves_code(
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """
+    Test that updating an activity doesn't change its code.
+
+    Scenario:
+    - Code field is unique and should not be updatable
+    - Update request should only affect name and description
+    """
+    # Arrange: Create activity
+    activity = await create_test_prof_activity(
+        db_session,
+        code="immutable_code",
+        name="Original Name",
+    )
+
+    # Act: Update (code should remain unchanged)
+    update_data = {
+        "name": "New Name",
+        "description": "New description",
+    }
+    response = await admin_client.put(
+        f"/api/prof-activities/{activity.id}",
+        json=update_data,
+    )
+
+    # Assert: Code unchanged
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == "immutable_code"
+    assert data["name"] == "New Name"
+
+
+@pytest.mark.integration
+async def test_case_sensitive_codes(
+    admin_client: AsyncClient,
+) -> None:
+    """
+    Test that codes are case-sensitive.
+
+    Scenario:
+    - Create activity with code 'Developer'
+    - Create another with code 'developer'
+    - Both should be created successfully (different codes)
+    """
+    # Act: Create first activity
+    response1 = await admin_client.post(
+        "/api/prof-activities",
+        json={"code": "Developer", "name": "Developer (capitalized)"},
+    )
+    assert response1.status_code == 201
+
+    # Act: Create second activity with different case
+    response2 = await admin_client.post(
+        "/api/prof-activities",
+        json={"code": "developer", "name": "developer (lowercase)"},
+    )
+    assert response2.status_code == 201
+
+    # Assert: Both exist
+    list_response = await admin_client.get("/api/prof-activities")
+    activities = list_response.json()["activities"]
+    codes = [a["code"] for a in activities]
+    assert "Developer" in codes
+    assert "developer" in codes

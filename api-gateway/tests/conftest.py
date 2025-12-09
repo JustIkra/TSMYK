@@ -1,249 +1,236 @@
 """
-Pytest configuration and shared fixtures for api-gateway tests.
+Pytest configuration and fixtures for api-gateway tests.
+
+Provides:
+- Async test client for FastAPI
+- Test database session with transaction rollback
+- User fixtures (admin, active user, pending user)
+- Authentication helpers
 """
 
-import os
-from collections.abc import AsyncGenerator, Generator
-from pathlib import Path
-
-
-def _load_test_env() -> None:
-    """Load environment variables before importing app modules."""
-    from dotenv import load_dotenv
-
-    env_path = Path(__file__).parent.parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
-    else:
-        env_path_local = Path(__file__).parent.parent / ".env"
-        if env_path_local.exists():
-            load_dotenv(env_path_local, override=False)
-
-
-_load_test_env()
+import uuid
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.base import Base
 from app.db.models import User
 from app.db.session import get_db
-from main import app
+from app.services.auth import create_access_token, hash_password
+
+# Test database URL - use same DSN but tests run in transactions
+TEST_DATABASE_URL = settings.postgres_dsn
 
 
-@pytest.fixture
-def clean_env() -> Generator[None, None, None]:
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """
-    Clean environment fixture that saves and restores env variables.
+    Create a test database session with automatic rollback.
 
-    Use this to isolate tests from each other and from system environment.
+    Each test runs in its own transaction that is rolled back after the test,
+    ensuring test isolation without requiring database cleanup.
     """
-    # Save current environment
-    original_env = os.environ.copy()
-
-    yield
-
-    # Restore original environment
-    os.environ.clear()
-    os.environ.update(original_env)
-
-
-@pytest.fixture
-def test_env(clean_env: None) -> dict[str, str]:
-    """
-    Minimal test environment with required variables.
-
-    Returns:
-        Dict with minimal configuration for testing
-    """
-    env = {
-        "ENV": "test",
-        "JWT_SECRET": "test_secret_key_for_testing_only",
-        "POSTGRES_DSN": "postgresql+asyncpg://test:test@localhost:5432/test_db",
-        "REDIS_URL": "redis://localhost:6379/1",
-        "RABBITMQ_URL": "amqp://guest:guest@localhost:5672//",
-        "GEMINI_API_KEYS": "test_dummy_key_for_testing",
-    }
-
-    # Apply to os.environ
-    os.environ.update(env)
-
-    return env
-
-
-@pytest.fixture
-def dev_env(clean_env: None) -> dict[str, str]:
-    """
-    Development environment configuration.
-
-    Returns:
-        Dict with dev configuration
-    """
-    env = {
-        "ENV": "dev",
-        "JWT_SECRET": "dev_secret_key",
-        "POSTGRES_DSN": "postgresql+asyncpg://dev:dev@localhost:5432/dev_db",
-        "GEMINI_API_KEYS": "dev_dummy_key_for_testing",
-    }
-
-    os.environ.update(env)
-
-    return env
-
-
-@pytest.fixture
-def ci_env(clean_env: None) -> dict[str, str]:
-    """
-    CI environment configuration.
-
-    Returns:
-        Dict with ci configuration
-    """
-    env = {
-        "ENV": "ci",
-        "JWT_SECRET": "ci_secret_key",
-        "POSTGRES_DSN": "postgresql+asyncpg://ci:ci@localhost:5432/ci_db",
-        "GEMINI_API_KEYS": "ci_dummy_key_for_testing",
-    }
-
-    os.environ.update(env)
-
-    return env
-
-
-@pytest.fixture
-def prod_env(clean_env: None) -> dict[str, str]:
-    """
-    Production environment configuration.
-
-    Returns:
-        Dict with prod configuration
-    """
-    env = {
-        "ENV": "prod",
-        "JWT_SECRET": "very_secure_production_secret_key_change_me",
-        "POSTGRES_DSN": "postgresql+asyncpg://prod:prod@db.example.com:5432/prod_db",
-    }
-
-    os.environ.update(env)
-
-    return env
-
-
-# Database Fixtures
-
-@pytest.fixture
-async def test_db_engine():
-    """
-    Create a test database engine.
-
-    Uses the POSTGRES_DSN from settings (loaded from test_env).
-    Creates all tables before tests and drops them after.
-    Also seeds prof_activity data for tests.
-    """
-    # Create async engine for test database
-    # Use READ COMMITTED isolation to see committed changes immediately
+    # Create engine for this test
     engine = create_async_engine(
-        settings.postgres_dsn, echo=False, isolation_level="READ COMMITTED"
+        TEST_DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
     )
 
-    # Create all tables and seed data
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create session factory bound to this engine
+    TestAsyncSessionLocal = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
-        # Seed prof_activity data removed (seeds directory removed in favor of direct DB management)
-        # def seed_prof_activities(connection):
-        #     from sqlalchemy import text
-        #     for seed in PROF_ACTIVITY_SEED_DATA:
-        #         stmt = text(...)
-        #         connection.execute(stmt, {...})
-        # await conn.run_sync(seed_prof_activities)
+    async with engine.connect() as connection:
+        # Begin a non-ORM transaction
+        transaction = await connection.begin()
 
-    yield engine
+        # Bind an individual session to the connection
+        async_session = TestAsyncSessionLocal(bind=connection)
 
-    # Drop all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # Begin a nested transaction (using SAVEPOINT)
+        nested = await connection.begin_nested()
+
+        # If the application code calls session.commit, it will end the nested
+        # transaction. We need to start a new one when that happens.
+        @event.listens_for(async_session.sync_session, "after_transaction_end")
+        def end_savepoint(session: Session, transaction_obj: Any) -> None:
+            nonlocal nested
+            if not nested.is_active:
+                nested = connection.sync_connection.begin_nested()  # type: ignore
+
+        try:
+            yield async_session
+        finally:
+            await async_session.close()
+            await transaction.rollback()
 
     await engine.dispose()
 
 
-@pytest.fixture
-async def db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Create a test database session.
-
-    Each test gets a fresh session with automatic rollback.
-    """
-    # Create session factory
-    async_session = async_sessionmaker(
-        test_db_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async with async_session() as session:
-        yield session
-        await session.rollback()
-
-
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
-    Create a test HTTP client with database dependency override.
+    Create an async HTTP test client with database dependency override.
 
-    Usage:
-        async def test_endpoint(client):
-            response = await client.get("/api/auth/me")
-            assert response.status_code == 200
+    The client uses the test database session, ensuring all requests
+    use the same transaction that will be rolled back.
     """
+    from main import app
 
-    async def override_get_db():
+    # Override the get_db dependency to use our test session
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
         yield ac
 
+    # Clean up override
     app.dependency_overrides.clear()
 
 
-# Authentication Fixtures
+# User Fixtures
 
-@pytest.fixture
-async def active_user(db_session: AsyncSession) -> User:
+@pytest_asyncio.fixture
+async def admin_user(db_session: AsyncSession) -> User:
     """
-    Create an active test user.
+    Create an ACTIVE admin user for testing.
 
     Returns:
-        User instance with ACTIVE status
+        User with role=ADMIN, status=ACTIVE
     """
-    from app.services.auth import create_user
-
-    user = await create_user(db_session, "testuser@example.com", "TestPass123!")
-
-    # Activate user
-    user.status = "ACTIVE"
+    user = User(
+        id=uuid.uuid4(),
+        email="admin@test.local",
+        password_hash=hash_password("AdminPass123"),
+        full_name="Test Admin",
+        role="ADMIN",
+        status="ACTIVE",
+        created_at=datetime.now(UTC),
+        approved_at=datetime.now(UTC),
+    )
+    db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
-
     return user
 
 
-@pytest.fixture
-async def active_user_token(active_user: User) -> str:
+@pytest_asyncio.fixture
+async def active_user(db_session: AsyncSession) -> User:
     """
-    Generate JWT token for active test user.
+    Create an ACTIVE regular user for testing.
 
     Returns:
-        JWT access token string
+        User with role=USER, status=ACTIVE
     """
-    from app.services.auth import create_access_token
-
-    token = create_access_token(
-        user_id=active_user.id, email=active_user.email, role=active_user.role
+    user = User(
+        id=uuid.uuid4(),
+        email="user@test.local",
+        password_hash=hash_password("UserPass123"),
+        full_name="Test User",
+        role="USER",
+        status="ACTIVE",
+        created_at=datetime.now(UTC),
+        approved_at=datetime.now(UTC),
     )
-    return token
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def pending_user(db_session: AsyncSession) -> User:
+    """
+    Create a PENDING user for testing.
+
+    Returns:
+        User with role=USER, status=PENDING
+    """
+    user = User(
+        id=uuid.uuid4(),
+        email="pending@test.local",
+        password_hash=hash_password("PendingPass123"),
+        full_name="Pending User",
+        role="USER",
+        status="PENDING",
+        created_at=datetime.now(UTC),
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+# Authentication Helpers
+
+def get_auth_cookie(user: User) -> dict[str, str]:
+    """
+    Generate authentication cookie for a user.
+
+    Args:
+        user: User to authenticate as
+
+    Returns:
+        Cookie dict for use in test client requests
+    """
+    token = create_access_token(user.id, user.email, user.role)
+    return {"access_token": token}
+
+
+def get_auth_header(user: User) -> dict[str, str]:
+    """
+    Generate Authorization header for a user.
+
+    Args:
+        user: User to authenticate as
+
+    Returns:
+        Headers dict with Bearer token
+    """
+    token = create_access_token(user.id, user.email, user.role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def admin_client(client: AsyncClient, admin_user: User) -> AsyncClient:
+    """
+    Create a test client authenticated as admin.
+
+    Sets the access_token cookie for all requests.
+    """
+    client.cookies.set("access_token", create_access_token(
+        admin_user.id, admin_user.email, admin_user.role
+    ))
+    return client
+
+
+@pytest_asyncio.fixture
+async def user_client(client: AsyncClient, active_user: User) -> AsyncClient:
+    """
+    Create a test client authenticated as regular user.
+
+    Sets the access_token cookie for all requests.
+    """
+    client.cookies.set("access_token", create_access_token(
+        active_user.id, active_user.email, active_user.role
+    ))
+    return client

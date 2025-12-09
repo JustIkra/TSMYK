@@ -1,1 +1,1 @@
-"""Tests package for api-gateway."""
+# api-gateway/tests - Test suite for Workers Proficiency Assessment API
