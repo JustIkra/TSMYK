@@ -15,6 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => user.value !== null)
   const isAdmin = computed(() => user.value?.role === 'ADMIN')
   const isActive = computed(() => user.value?.status === 'ACTIVE')
+  const displayName = computed(() => user.value?.full_name || user.value?.email)
 
   async function register(email, password) {
     loading.value = true
@@ -100,6 +101,39 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateProfile(fullName) {
+    loading.value = true
+    error.value = null
+    try {
+      const data = await authApi.updateProfile(fullName)
+      user.value = data
+      return data
+    } catch (err) {
+      const normalized = normalizeApiError(err, 'Ошибка обновления профиля')
+      error.value = normalized.message
+      err.normalizedError = normalized
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function changePassword(currentPassword, newPassword) {
+    loading.value = true
+    error.value = null
+    try {
+      const data = await authApi.changePassword(currentPassword, newPassword)
+      return data
+    } catch (err) {
+      const normalized = normalizeApiError(err, 'Ошибка смены пароля')
+      error.value = normalized.message
+      err.normalizedError = normalized
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     user,
     loading,
@@ -107,10 +141,13 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isActive,
+    displayName,
     register,
     login,
     logout,
     fetchCurrentUser,
-    checkActive
+    checkActive,
+    updateProfile,
+    changePassword
   }
 })

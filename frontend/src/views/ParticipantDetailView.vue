@@ -295,20 +295,12 @@
                   class="final-report-actions"
                 >
                   <el-button
-                    type="info"
-                    size="small"
-                    @click="viewFinalReportJSON(result)"
-                  >
-                    <el-icon><DocumentCopy /></el-icon>
-                    Просмотреть JSON
-                  </el-button>
-                  <el-button
                     type="primary"
                     size="small"
-                    @click="downloadFinalReportHTML(result)"
+                    @click="downloadFinalReportPdf(result)"
                   >
                     <el-icon><Download /></el-icon>
-                    Скачать HTML
+                    Скачать PDF
                   </el-button>
                 </div>
               </div>
@@ -457,7 +449,6 @@ import {
   View,
   Delete,
   TrendCharts,
-  DocumentCopy,
   Refresh
 } from '@element-plus/icons-vue'
 import AppLayout from '@/components/AppLayout.vue'
@@ -916,62 +907,28 @@ const calculateScoring = async () => {
 }
 
 // Final Report
-const viewFinalReportJSON = async (result) => {
+const downloadFinalReportPdf = async (result) => {
   if (!result.prof_activity_code) {
     ElMessage.warning('Код профессиональной деятельности не найден')
     return
   }
 
   try {
-    const reportData = await scoringApi.getFinalReport(
+    const response = await scoringApi.downloadFinalReportPdf(
       route.params.id,
-      result.prof_activity_code,
-      'json'
+      result.prof_activity_code
     )
-
-    // Открываем JSON в новой вкладке
-    const jsonStr = JSON.stringify(reportData, null, 2)
-    const blob = new Blob([jsonStr], { type: 'application/json' })
-    const url = window.URL.createObjectURL(blob)
-    window.open(url, '_blank')
-    window.URL.revokeObjectURL(url)
-
-    ElMessage.success('Отчёт JSON открыт в новой вкладке')
-  } catch (error) {
-    console.error('Error viewing final report JSON:', error)
-    const errorMessage = error.response?.data?.detail || 'Ошибка загрузки финального отчёта'
-    ElMessage.error(errorMessage)
-  }
-}
-
-const downloadFinalReportHTML = async (result) => {
-  if (!result.prof_activity_code) {
-    ElMessage.warning('Код профессиональной деятельности не найден')
-    return
-  }
-
-  try {
-    const htmlContent = await scoringApi.getFinalReport(
-      route.params.id,
-      result.prof_activity_code,
-      'html'
-    )
-
-    // Скачиваем HTML файл
-    const blob = new Blob([htmlContent], { type: 'text/html' })
-    const url = window.URL.createObjectURL(blob)
+    const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `final_report_${result.prof_activity_code}_${new Date().toISOString().split('T')[0]}.html`)
+    link.setAttribute('download', `final_report_${result.prof_activity_code}_${new Date().toISOString().split('T')[0]}.pdf`)
     document.body.appendChild(link)
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-
-    ElMessage.success('Отчёт HTML скачан')
+    ElMessage.success('Отчёт PDF скачан')
   } catch (error) {
-    console.error('Error downloading final report HTML:', error)
-    const errorMessage = error.response?.data?.detail || 'Ошибка загрузки финального отчёта'
+    const errorMessage = error.response?.data?.detail || 'Ошибка загрузки PDF отчёта'
     ElMessage.error(errorMessage)
   }
 }

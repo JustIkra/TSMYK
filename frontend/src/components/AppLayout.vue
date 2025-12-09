@@ -41,18 +41,18 @@
         <el-dropdown @command="handleUserCommand">
           <span class="user-dropdown">
             <el-icon><UserFilled /></el-icon>
-            <span>{{ authStore.user?.email }}</span>
+            <span>{{ displayName }}</span>
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item disabled>
-                <el-tag
-                  :type="authStore.isAdmin ? 'danger' : 'info'"
-                  size="small"
-                >
-                  {{ authStore.isAdmin ? 'ADMIN' : 'USER' }}
-                </el-tag>
+              <el-dropdown-item command="profile">
+                <el-icon><User /></el-icon>
+                Профиль
+              </el-dropdown-item>
+              <el-dropdown-item command="settings">
+                <el-icon><Setting /></el-icon>
+                Настройки
               </el-dropdown-item>
               <el-dropdown-item
                 divided
@@ -85,13 +85,18 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const activeRoute = computed(() => route.path)
+const displayName = computed(() => authStore.user?.full_name || authStore.user?.email)
 
 const handleMenuSelect = (index) => {
   router.push(index)
 }
 
 const handleUserCommand = async (command) => {
-  if (command === 'logout') {
+  if (command === 'profile') {
+    router.push('/profile')
+  } else if (command === 'settings') {
+    router.push('/settings')
+  } else if (command === 'logout') {
     try {
       await authStore.logout()
       ElMessage.success('Выход выполнен')

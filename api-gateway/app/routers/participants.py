@@ -8,7 +8,7 @@ All endpoints require authentication (ACTIVE user).
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_active_user
@@ -171,7 +171,7 @@ async def delete_participant(
 async def get_final_report(
     participant_id: UUID,
     activity_code: str = Query(..., description="Professional activity code"),
-    format: str = Query("json", description="Response format: 'json' or 'html'"),
+    format: str = Query("json", description="Response format: 'json', 'html', or 'pdf'"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -188,11 +188,12 @@ async def get_final_report(
 
     Query parameters:
     - activity_code: Professional activity code (required)
-    - format: 'json' (default) or 'html'
+    - format: 'json' (default), 'html', or 'pdf'
 
     Returns:
     - JSON: FinalReportResponse with all report data
     - HTML: Rendered HTML report (if format=html)
+    - PDF: PDF document (if format=pdf)
 
     Raises:
     - 404: Participant or activity not found
@@ -214,6 +215,20 @@ async def get_final_report(
 
         html_content = render_final_report_html(report_data)
         return HTMLResponse(content=html_content)
+
+    if format == "pdf":
+        from app.services.report_template import render_final_report_html
+        from app.services.pdf_generator import render_html_to_pdf
+
+        html_content = render_final_report_html(report_data)
+        pdf_bytes = render_html_to_pdf(html_content)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="report_{participant_id}_{activity_code}.pdf"'
+            }
+        )
 
     # Return JSON by default
     return FinalReportResponse(**report_data)

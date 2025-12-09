@@ -301,6 +301,8 @@
             body {
                 background: white;
                 padding: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
             .container {
@@ -311,6 +313,10 @@
             .score-section {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
+            }
+
+            .score-section, .item, .dev-area-item, .recommendation {
+                break-inside: avoid;
             }
         }
     </style>

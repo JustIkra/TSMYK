@@ -324,3 +324,65 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> None:
 
     await db.delete(user)
     await db.commit()
+
+
+async def update_user_profile(db: AsyncSession, user_id: uuid.UUID, full_name: str | None) -> User:
+    """
+    Update user profile information.
+
+    Args:
+        db: Database session
+        user_id: User UUID
+        full_name: New full name (ФИО)
+
+    Returns:
+        Updated user object
+
+    Raises:
+        ValueError: If user not found
+    """
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise ValueError(f"User with ID {user_id} not found")
+
+    user.full_name = full_name
+    await db.commit()
+    await db.refresh(user)
+
+    return user
+
+
+async def change_user_password(
+    db: AsyncSession, user_id: uuid.UUID, current_password: str, new_password: str
+) -> User:
+    """
+    Change user password after verifying current password.
+
+    Args:
+        db: Database session
+        user_id: User UUID
+        current_password: Current plaintext password for verification
+        new_password: New plaintext password (will be hashed)
+
+    Returns:
+        Updated user object
+
+    Raises:
+        ValueError: If user not found or current password is incorrect
+    """
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        raise ValueError(f"User with ID {user_id} not found")
+
+    # Verify current password
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("Current password is incorrect")
+
+    # Update password
+    user.password_hash = hash_password(new_password)
+    await db.commit()
+    await db.refresh(user)
+
+    return user

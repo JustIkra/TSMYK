@@ -59,12 +59,56 @@ class ApproveUserRequest(BaseModel):
     }
 
 
+# Profile Management Schemas
+class ProfileUpdateRequest(BaseModel):
+    """Request schema for updating user profile."""
+
+    full_name: str | None = Field(None, min_length=1, max_length=255, description="User full name (ФИО)")
+
+    model_config = {
+        "json_schema_extra": {"example": {"full_name": "Иванов Иван Иванович"}}
+    }
+
+
+class PasswordChangeRequest(BaseModel):
+    """Request schema for changing password."""
+
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, max_length=100, description="New password")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """
+        Validate password strength.
+
+        Requirements:
+        - At least 8 characters
+        - Contains at least one letter and one digit
+        """
+        if not any(c.isalpha() for c in v):
+            raise ValueError("Password must contain at least one letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "current_password": "oldpassword123",
+                "new_password": "newpassword123",
+            }
+        }
+    }
+
+
 # Response Schemas
 class UserResponse(BaseModel):
     """Response schema for user data."""
 
     id: UUID
     email: str
+    full_name: str | None = None
     role: str
     status: str
     created_at: datetime

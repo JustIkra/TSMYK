@@ -47,5 +47,27 @@ export const authApi = {
   async checkActive() {
     const response = await apiClient.get('/auth/me/check-active')
     return response.data
+  },
+
+  /**
+   * Обновить профиль (ФИО)
+   * @param {string} fullName
+   */
+  async updateProfile(fullName) {
+    const response = await apiClient.put('/auth/me/profile', { full_name: fullName })
+    return response.data
+  },
+
+  /**
+   * Сменить пароль
+   * @param {string} currentPassword
+   * @param {string} newPassword
+   */
+  async changePassword(currentPassword, newPassword) {
+    const response = await apiClient.post('/auth/me/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword
+    })
+    return response.data
   }
 }

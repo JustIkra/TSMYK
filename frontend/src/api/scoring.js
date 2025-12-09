@@ -67,5 +67,21 @@ export const scoringApi = {
 
     const response = await apiClient.get(`/participants/${participantId}/final-report`, config)
     return format === 'html' ? response.data : response.data
+  },
+
+  /**
+   * Скачать финальный отчёт участника в формате PDF
+   * @param {string} participantId - UUID
+   * @param {string} activityCode - Код профессиональной деятельности
+   */
+  async downloadFinalReportPdf(participantId, activityCode) {
+    const response = await apiClient.get(`/participants/${participantId}/final-report`, {
+      params: {
+        activity_code: activityCode,
+        format: 'pdf'
+      },
+      responseType: 'blob'
+    })
+    return response
   }
 }

@@ -411,7 +411,7 @@ async def test_final_report__invalid_format_parameter__defaults_to_json(
 
     # Act: Request with invalid format parameter
     response = await client.get(
-        f"/api/participants/{participant.id}/final-report?activity_code={prof_activity.code}&format=pdf",
+        f"/api/participants/{participant.id}/final-report?activity_code={prof_activity.code}&format=invalid_format",
         cookies=auth_cookies,
     )
 
@@ -421,3 +421,46 @@ async def test_final_report__invalid_format_parameter__defaults_to_json(
     data = response.json()
     assert "participant_name" in data
     assert "score_pct" in data
+
+
+@pytest.mark.asyncio
+async def test_api_final_report_pdf__with_format_param__returns_pdf(
+    test_env, client: AsyncClient, db_session, participant_with_full_data
+):
+    """Test API endpoint for final report PDF format."""
+    # Arrange
+    participant = participant_with_full_data["participant"]
+    prof_activity = participant_with_full_data["prof_activity"]
+
+    # Create active user and get auth cookies
+    from app.services.auth import create_user
+
+    user = await create_user(db_session, "active@example.com", "password123", role="USER")
+    user.status = "ACTIVE"
+    await db_session.commit()
+
+    # Login to get cookies
+    login_response = await client.post(
+        "/api/auth/login", json={"email": "active@example.com", "password": "password123"}
+    )
+    assert login_response.status_code == 200
+    auth_cookies = dict(login_response.cookies)
+
+    # Act
+    response = await client.get(
+        f"/api/participants/{participant.id}/final-report?activity_code={prof_activity.code}&format=pdf",
+        cookies=auth_cookies,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert "application/pdf" in response.headers.get("content-type", "")
+
+    # Check Content-Disposition header for download
+    content_disposition = response.headers.get("content-disposition", "")
+    assert "attachment" in content_disposition
+    assert ".pdf" in content_disposition
+
+    # Check PDF magic bytes (PDF files start with %PDF-)
+    pdf_content = response.content
+    assert pdf_content[:5] == b"%PDF-"

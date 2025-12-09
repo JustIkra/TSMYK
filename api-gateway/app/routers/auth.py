@@ -15,11 +15,19 @@ from app.db.session import get_db
 from app.schemas.auth import (
     LoginRequest,
     MessageResponse,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
     RegisterRequest,
     TokenResponse,
     UserResponse,
 )
-from app.services.auth import authenticate_user, create_access_token, create_user
+from app.services.auth import (
+    authenticate_user,
+    change_user_password,
+    create_access_token,
+    create_user,
+    update_user_profile,
+)
 
 router = APIRouter()
 
@@ -171,3 +179,77 @@ async def check_active(
     - 403: User is PENDING or DISABLED
     """
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/me/profile", response_model=UserResponse)
+async def update_profile(
+    request: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update current user profile (full_name).
+
+    **Requires:** Valid JWT token + ACTIVE status
+
+    **Request Body:**
+    - full_name: User full name (ФИО) - optional
+
+    **Errors:**
+    - 401: Not authenticated
+    - 403: User is not ACTIVE
+    - 422: Invalid full_name format
+    """
+    try:
+        updated_user = await update_user_profile(db, current_user.id, request.full_name)
+        return UserResponse.model_validate(updated_user)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable or schema not initialized.",
+        ) from e
+
+
+@router.post("/me/change-password", response_model=MessageResponse)
+async def change_password(
+    request: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Change current user password.
+
+    Verifies current password before updating to new password.
+
+    **Requires:** Valid JWT token + ACTIVE status
+
+    **Request Body:**
+    - current_password: Current password for verification
+    - new_password: New password (min 8 chars, at least one letter and one digit)
+
+    **Errors:**
+    - 400: Current password is incorrect
+    - 401: Not authenticated
+    - 403: User is not ACTIVE
+    - 422: New password does not meet strength requirements
+    """
+    try:
+        await change_user_password(db, current_user.id, request.current_password, request.new_password)
+        return MessageResponse(message="Password changed successfully")
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable or schema not initialized.",
+        ) from e

@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR ${APP_HOME}
 
-# System deps (curl for healthcheck)
+# System deps (curl for healthcheck, weasyprint dependencies for PDF generation)
 # Note: resolvconf may fail to configure /etc/resolv.conf in Docker, but it's not critical
 # WireGuard tools are required for both WireGuard and AWG (AWG falls back to wg-quick if amneziawg is not available)
 # For full AWG obfuscation support, install amneziawg client separately (not included in standard repos)
@@ -23,6 +23,11 @@ RUN apt-get update \
         procps \
         libgomp1 \
         libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf2.0-0 \
+        libffi-dev \
+        shared-mime-info \
     && (DEBIAN_FRONTEND=noninteractive apt-get install -y resolvconf || true) \
     && rm -rf /var/lib/apt/lists/*
 
