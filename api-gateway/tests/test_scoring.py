@@ -477,81 +477,36 @@ async def test_calculate_score_invalid_weight_sum(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_calculate_score_value_out_of_range(
+async def test_database_rejects_metric_value_out_of_range(
     db_session: AsyncSession,
     test_participant: Participant,
-    metric_defs: list[MetricDef],
 ):
     """
-    Test error when metric value is outside valid range [1..10].
+    Test that database CHECK constraint prevents metric values outside [1..10].
+
+    The participant_metric table has a CHECK constraint 'participant_metric_value_range_check'
+    that ensures values are between 1 and 10. This test verifies that constraint works.
     """
-    # Create a unique activity for this test to avoid conflicts
-    unique_code = f"test_range_{uuid.uuid4().hex[:8]}"
-    test_activity = ProfActivity(
-        id=uuid.uuid4(),
-        code=unique_code,
-        name="Test Range Activity",
-        description="Test activity for range validation",
-    )
-    db_session.add(test_activity)
-    await db_session.commit()
-    await db_session.refresh(test_activity)
+    from sqlalchemy.exc import IntegrityError
 
-    # Create weight table for this activity
-    weights = [
-        {"metric_code": "competency_1", "weight": "0.50"},
-        {"metric_code": "competency_2", "weight": "0.30"},
-        {"metric_code": "competency_3", "weight": "0.20"},
-    ]
-    weight_table = WeightTable(
-        prof_activity_id=test_activity.id,
-        weights=weights,
-    )
-    db_session.add(weight_table)
-    await db_session.commit()
-
-    # Create metric with invalid value (11 > 10)
+    # Try to create metric with invalid value (11 > 10)
     invalid_metric = ParticipantMetric(
         participant_id=test_participant.id,
-        metric_code="competency_1",
+        metric_code="test_metric",
         value=Decimal("11.00"),  # Invalid: > 10
         confidence=Decimal("0.95"),
     )
     db_session.add(invalid_metric)
 
-    # Add valid metrics for the other two
-    valid_metrics = [
-        ParticipantMetric(
-            participant_id=test_participant.id,
-            metric_code="competency_2",
-            value=Decimal("6.00"),
-            confidence=Decimal("0.90"),
-        ),
-        ParticipantMetric(
-            participant_id=test_participant.id,
-            metric_code="competency_3",
-            value=Decimal("4.00"),
-            confidence=Decimal("0.85"),
-        ),
-    ]
-    for metric in valid_metrics:
-        db_session.add(metric)
+    # Database should reject this with a CHECK constraint violation
+    with pytest.raises(IntegrityError) as exc_info:
+        await db_session.commit()
 
-    await db_session.commit()
+    # Verify it's the value range check that failed
+    assert "participant_metric_value_range_check" in str(exc_info.value)
 
-    # Disable AI recommendations for this test
-    with patch("app.core.config.settings.ai_recommendations_enabled", False):
-        service = ScoringService(db_session, gemini_client=None)
-
-        with pytest.raises(ValueError) as exc_info:
-            await service.calculate_score(
-                participant_id=test_participant.id,
-                prof_activity_code=test_activity.code,
-            )
-
-    error_message = str(exc_info.value)
-    assert "out of range" in error_message
-    assert "[1..10]" in error_message
+    # Rollback to clean up
+    await db_session.rollback()
 
 
 @pytest.mark.unit
