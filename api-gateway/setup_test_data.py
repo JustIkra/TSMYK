@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Скрипт для создания тестовых данных:
-- Участник Батура А.А.
-- Три отчёта из папки User story
-- Профдеятельность "Организация и проведение совещаний"
-- Весовая таблица с 13 метриками
-"""
 
 import asyncio
 import sys
@@ -150,7 +142,6 @@ WEIGHTS = {
     "vocabulary": Decimal("0.03"),
 }
 
-# Эталонные значения метрик для Батура А.А.
 REFERENCE_VALUES = {
     "communicability": Decimal("7.5"),
     "teamwork": Decimal("6.5"),
@@ -199,16 +190,10 @@ async def main():
                 print(f"   ✓ Создана метрика '{metric_def.name}'")
                 metric_map[metric_def.code] = created
 
-        # 2. Создаём участника
-        print("\n2️⃣ Создание участника...")
-        participant_data = ParticipantCreateRequest(
-            full_name="Батура Александр Александрович",
-            birth_date="1985-06-15",
-            external_id="BATURA_AA_001",
-        )
+
 
         # Проверяем, существует ли участник
-        existing_participants, _ = await participant_repo.search(query="Батура")
+        existing_participants, _ = await participant_repo.search(query="")
         if existing_participants:
             participant = existing_participants[0]
             print(f"   ✓ Участник уже существует: {participant.full_name} (ID: {participant.id})")
@@ -273,9 +258,7 @@ async def main():
 
         print("\n📁 Файлы отчётов для загрузки:")
         report_files = [
-            ".memory-base/Product Overview/User story/Batura_A.A._Biznes-Profil_Otchyot_dlya_respondenta_1718107.docx",
-            ".memory-base/Product Overview/User story/Batura_A.A._Biznes-Profil_Otchyot_po_kompetentsiyam_1718107.docx",
-            ".memory-base/Product Overview/User story/Batura_A.A._Biznes-Profil_Biznes-otchyot_1718107.docx",
+
         ]
         for i, file in enumerate(report_files, 1):
             print(f"   {i}. {Path(file).name}")

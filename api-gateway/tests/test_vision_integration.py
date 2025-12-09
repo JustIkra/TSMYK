@@ -39,12 +39,10 @@ class TestVisionExtractionIntegration:
     3. Run: pytest tests/test_vision_integration.py -m integration -v
     """
 
-    async def test_extract_from_business_report(self):
-        """Test extraction from actual business profile report."""
+    """Test extraction from actual business profile report."""
         # Path to test DOCX file
         test_docx = Path(
             "/Users/maksim/git_projects/rksi_hack/.memory-base/"
-            "Product Overview/User story/Batura_A.A._Biznes-Profil_Biznes-otchyot_1718107.docx"
         )
 
         if not test_docx.exists():
