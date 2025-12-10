@@ -24,12 +24,12 @@ asyncio.run(check_metrics())
 
 vpn_flag="$(printf '%s' "${VPN_ENABLED:-0}" | tr '[:upper:]' '[:lower:]')"
 if [ "$vpn_flag" = "1" ] || [ "$vpn_flag" = "true" ] || [ "$vpn_flag" = "yes" ] || [ "$vpn_flag" = "on" ]; then
-    echo "Ensuring WireGuard/AWG interface before starting the worker..."
+    echo "Initializing VPN (Hysteria2/WireGuard/AWG)..."
     if ! python -m app.core.vpn_bootstrap; then
         echo "ERROR: VPN bootstrap failed! Worker will not start without VPN." >&2
         exit 1
     fi
-    echo "VPN interface is up and running."
+    echo "VPN initialized successfully."
 else
     echo "WARNING: VPN is disabled (VPN_ENABLED=0). Gemini API may not be accessible due to geographic restrictions."
     echo "If you see 'User location is not supported' errors, enable VPN by setting VPN_ENABLED=1"

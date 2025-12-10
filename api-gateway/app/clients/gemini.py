@@ -78,9 +78,25 @@ class HttpxTransport(GeminiTransport):
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create httpx client (lazy initialization)."""
         if self._client is None:
+            # Import settings to check VPN configuration
+            from app.core.config import settings
+
+            # Configure SOCKS5 proxy if Hysteria2 VPN is enabled
+            proxy_url = None
+            if settings.vpn_enabled and settings.vpn_type == "hysteria2":
+                proxy_url = f"socks5://127.0.0.1:{settings.hysteria2_socks5_port}"
+                logger.info(
+                    "gemini_client_using_socks5_proxy",
+                    extra={
+                        "proxy": proxy_url,
+                        "vpn_type": settings.vpn_type,
+                    },
+                )
+
             self._client = httpx.AsyncClient(
                 limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
                 follow_redirects=True,
+                proxy=proxy_url,
             )
         return self._client
 
