@@ -35,7 +35,7 @@
         </template>
 
         <el-descriptions
-          :column="2"
+          :column="isMobile ? 1 : 2"
           border
         >
           <el-descriptions-item label="ФИО">
@@ -251,7 +251,7 @@
       <el-dialog
         v-model="showUploadDialog"
         title="Загрузить отчёты"
-        width="600px"
+        :width="isMobile ? '95%' : '600px'"
         @close="resetBatchUpload"
       >
         <el-upload
@@ -354,7 +354,7 @@
       <el-dialog
         v-model="showScoringDialog"
         title="Рассчитать профессиональную пригодность"
-        width="500px"
+        :width="isMobile ? '95%' : '500px'"
       >
         <el-form
           :model="scoringForm"
@@ -467,6 +467,12 @@ const participantsStore = useParticipantsStore()
 
 const loading = ref(false)
 const loadingReports = ref(false)
+
+// Mobile responsiveness
+const isMobile = ref(window.innerWidth <= 768)
+const updateMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 const loadingActivities = ref(false)
 const uploading = ref(false)
 const calculating = ref(false)
@@ -950,6 +956,7 @@ const getRecommendationErrorTitle = (result) => {
 }
 
 onMounted(async () => {
+  window.addEventListener('resize', updateMobile)
   await loadParticipant()
   await loadReports()
   await loadScoringResults()
@@ -958,6 +965,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', updateMobile)
   stopAutoRefresh()
   stopRecommendationsRefresh()
 })
@@ -1192,12 +1200,59 @@ onUnmounted(() => {
     align-items: stretch;
   }
 
+  .card-header h2 {
+    font-size: 20px;
+  }
+
   .header-actions {
     flex-direction: column;
   }
 
+  .header-actions .el-button {
+    min-height: 44px;
+    width: 100%;
+  }
+
   .score-details {
     grid-template-columns: 1fr;
+  }
+
+  .final-report-actions .el-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .section-header .el-button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 375px) {
+  .score-number {
+    font-size: 24px;
+  }
+
+  .score-section h5 {
+    font-size: 14px;
+  }
+
+  .recommendations-status-section {
+    min-width: auto;
+  }
+
+  .card-header h2 {
+    font-size: 18px;
+  }
+
+  .section-header h3 {
+    font-size: 16px;
   }
 }
 </style>

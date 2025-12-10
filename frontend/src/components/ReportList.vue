@@ -221,7 +221,7 @@
         <div class="report-card__body">
           <div class="report-card__field">
             <span class="field-label">Файл:</span>
-            <span class="field-value">{{ report.file_ref?.filename || 'Без названия' }}</span>
+            <span class="field-value field-value--filename">{{ report.file_ref?.filename || 'Без названия' }}</span>
           </div>
           <div class="report-card__field">
             <span class="field-label">Дата загрузки:</span>
@@ -598,27 +598,42 @@ const handleAction = async ({ action, report }) => {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
+  gap: 12px;
 }
 
 .field-label {
   color: var(--color-text-secondary);
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .field-value {
   color: var(--color-text-primary);
   font-weight: 500;
+  text-align: right;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.field-value--filename {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-card__actions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .report-card__actions .el-button {
-  flex: 1;
-  min-width: 80px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
 }
 
 /* Dropdown danger item */
@@ -642,8 +657,25 @@ const handleAction = async ({ action, report }) => {
     width: 100%;
   }
 
+  .controls-left .el-select {
+    width: 100%;
+  }
+
   .controls-right .el-button {
     width: 100%;
+  }
+}
+
+/* Extra small screens - vertical field layout */
+@media (max-width: 375px) {
+  .report-card__field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .field-value {
+    text-align: left;
   }
 }
 </style>

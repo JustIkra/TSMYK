@@ -16,7 +16,7 @@
 
       <el-card class="search-card">
         <el-form
-          :inline="true"
+          :inline="!isMobile"
           :model="searchForm"
         >
           <el-form-item label="Поиск">
@@ -24,7 +24,7 @@
               v-model="searchForm.query"
               placeholder="Введите имя"
               clearable
-              style="width: 300px"
+              :style="isMobile ? 'width: 100%' : 'width: 300px'"
               @change="handleSearch"
             >
               <template #prefix>
@@ -37,7 +37,7 @@
               v-model="searchForm.external_id"
               placeholder="Внешний ID"
               clearable
-              style="width: 200px"
+              :style="isMobile ? 'width: 100%' : 'width: 200px'"
               @change="handleSearch"
             />
           </el-form-item>
@@ -48,7 +48,9 @@
         v-loading="participantsStore.loading"
         class="table-card"
       >
+        <!-- Desktop Table View -->
         <el-table
+          v-if="!isMobile"
           :data="participantsStore.participants"
           stripe
         >
@@ -94,7 +96,63 @@
           </el-table-column>
         </el-table>
 
-        <div class="pagination">
+        <!-- Mobile Card View -->
+        <div
+          v-else
+          class="participants-cards"
+        >
+          <el-card
+            v-for="participant in participantsStore.participants"
+            :key="participant.id"
+            class="participant-card"
+            shadow="hover"
+          >
+            <div class="participant-card__name">{{ participant.full_name }}</div>
+            <div class="participant-card__info">
+              <div class="participant-card__field">
+                <span class="field-label">ID:</span>
+                <span class="field-value">{{ participant.external_id || '—' }}</span>
+              </div>
+              <div class="participant-card__field">
+                <span class="field-label">Дата рождения:</span>
+                <span class="field-value">{{ participant.birth_date || '—' }}</span>
+              </div>
+            </div>
+            <div class="participant-card__actions">
+              <el-button
+                type="primary"
+                @click="viewParticipant(participant.id)"
+              >
+                Открыть
+              </el-button>
+              <el-button
+                type="danger"
+                @click="confirmDelete(participant)"
+              >
+                Удалить
+              </el-button>
+            </div>
+          </el-card>
+
+          <el-empty
+            v-if="!participantsStore.participants.length && !participantsStore.loading"
+            description="Нет участников"
+            :image-size="120"
+          >
+            <el-button
+              type="primary"
+              @click="showCreateDialog = true"
+            >
+              Добавить участника
+            </el-button>
+          </el-empty>
+        </div>
+
+        <!-- Desktop Pagination -->
+        <div
+          v-if="!isMobile"
+          class="pagination"
+        >
           <el-pagination
             v-model:current-page="searchForm.page"
             v-model:page-size="searchForm.size"
@@ -105,13 +163,30 @@
             @size-change="handleSearch"
           />
         </div>
+
+        <!-- Mobile Pagination -->
+        <div
+          v-else
+          class="pagination pagination--mobile"
+        >
+          <el-pagination
+            v-model:current-page="searchForm.page"
+            v-model:page-size="searchForm.size"
+            :total="participantsStore.pagination.total"
+            :page-sizes="[10, 20, 50]"
+            layout="prev, pager, next"
+            small
+            @current-change="handleSearch"
+            @size-change="handleSearch"
+          />
+        </div>
       </el-card>
 
       <!-- Диалог создания -->
       <el-dialog
         v-model="showCreateDialog"
         title="Добавить участника"
-        width="500px"
+        :width="isMobile ? '95%' : '500px'"
       >
         <el-form
           ref="createFormRef"
@@ -169,7 +244,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
@@ -178,6 +253,12 @@ import { useParticipantsStore } from '@/stores'
 
 const router = useRouter()
 const participantsStore = useParticipantsStore()
+
+// Responsive
+const isMobile = ref(window.innerWidth <= 768)
+const updateMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const searchForm = reactive({
   query: '',
@@ -254,7 +335,12 @@ const confirmDelete = (participant) => {
 }
 
 onMounted(() => {
+  window.addEventListener('resize', updateMobile)
   handleSearch()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateMobile)
 })
 </script>
 
@@ -278,6 +364,10 @@ onMounted(() => {
   margin: 0;
   font-size: 24px;
   color: var(--color-text-primary);
+}
+
+.header-content .el-button {
+  min-height: 44px;
 }
 
 .search-card {
@@ -305,5 +395,87 @@ onMounted(() => {
 
 .actions-group__danger {
   margin: 0;
+}
+
+.pagination--mobile {
+  justify-content: center;
+}
+
+/* Mobile Card Styles */
+.participants-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.participant-card {
+  width: 100%;
+}
+
+.participant-card__name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 12px;
+}
+
+.participant-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.participant-card__field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.field-label {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.field-value {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.participant-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.participant-card__actions .el-button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-content h1 {
+    font-size: 20px;
+  }
+
+  .search-card :deep(.el-form-item) {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 12px;
+  }
+
+  .search-card :deep(.el-form-item__content) {
+    width: 100%;
+  }
 }
 </style>
