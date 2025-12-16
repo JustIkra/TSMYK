@@ -172,6 +172,7 @@ async def get_final_report(
     participant_id: UUID,
     activity_code: str = Query(..., description="Professional activity code"),
     format: str = Query("json", description="Response format: 'json', 'html', or 'pdf'"),
+    scoring_result_id: UUID | None = Query(None, description="Specific scoring result ID (optional, uses latest if not provided)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -205,6 +206,7 @@ async def get_final_report(
         report_data = await scoring_service.generate_final_report(
             participant_id=participant_id,
             prof_activity_code=activity_code,
+            scoring_result_id=scoring_result_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

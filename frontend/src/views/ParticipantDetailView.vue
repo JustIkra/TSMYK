@@ -924,7 +924,8 @@ const downloadFinalReportPdf = async (result) => {
   try {
     const response = await scoringApi.downloadFinalReportPdf(
       route.params.id,
-      result.prof_activity_code
+      result.prof_activity_code,
+      result.id
     )
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')

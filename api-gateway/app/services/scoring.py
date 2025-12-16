@@ -268,6 +268,7 @@ class ScoringService:
         self,
         participant_id: UUID,
         prof_activity_code: str,
+        scoring_result_id: UUID | None = None,
     ) -> dict:
         """
         Generate final report data for a participant.
@@ -294,11 +295,27 @@ class ScoringService:
         if not weight_table:
             raise ValueError(f"No active weight table for activity '{prof_activity_code}'")
 
-        # 3. Get latest scoring result
-        scoring_result = await self.scoring_result_repo.get_latest_by_participant_and_weight_table(
-            participant_id=participant_id,
-            weight_table_id=weight_table.id,
-        )
+        # 3. Get scoring result (specific by ID or latest)
+        if scoring_result_id:
+            # Get specific scoring result by ID
+            scoring_result = await self.scoring_result_repo.get_by_id(scoring_result_id)
+            if not scoring_result:
+                raise ValueError(f"Scoring result {scoring_result_id} not found")
+            # Validate that it belongs to the correct participant and weight table
+            if scoring_result.participant_id != participant_id:
+                raise ValueError(f"Scoring result {scoring_result_id} does not belong to participant {participant_id}")
+            if scoring_result.weight_table_id != weight_table.id:
+                raise ValueError(
+                    f"Scoring result {scoring_result_id} was calculated for a different weight table. "
+                    f"Please use the correct activity_code or omit scoring_result_id for latest result."
+                )
+        else:
+            # Get latest scoring result (existing behavior)
+            scoring_result = await self.scoring_result_repo.get_latest_by_participant_and_weight_table(
+                participant_id=participant_id,
+                weight_table_id=weight_table.id,
+            )
+
         if not scoring_result:
             raise ValueError(
                 f"No scoring result found for participant {participant_id} and activity '{prof_activity_code}'. "

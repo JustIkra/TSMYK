@@ -1150,8 +1150,8 @@ async def test_multiple_scoring_calculations_create_history(
                 f"/api/scoring/participants/{test_participant.id}/calculate",
                 params={"activity_code": developer_activity.code},
                 headers=headers,
-                )
-                assert response.status_code == 200
+            )
+            assert response.status_code == 200
 
     # Get scoring history
     response = await client.get(

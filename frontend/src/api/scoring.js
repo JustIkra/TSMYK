@@ -73,13 +73,18 @@ export const scoringApi = {
    * Скачать финальный отчёт участника в формате PDF
    * @param {string} participantId - UUID
    * @param {string} activityCode - Код профессиональной деятельности
+   * @param {string} [scoringResultId] - UUID конкретного результата (опционально)
    */
-  async downloadFinalReportPdf(participantId, activityCode) {
+  async downloadFinalReportPdf(participantId, activityCode, scoringResultId = null) {
+    const params = {
+      activity_code: activityCode,
+      format: 'pdf'
+    }
+    if (scoringResultId) {
+      params.scoring_result_id = scoringResultId
+    }
     const response = await apiClient.get(`/participants/${participantId}/final-report`, {
-      params: {
-        activity_code: activityCode,
-        format: 'pdf'
-      },
+      params,
       responseType: 'blob'
     })
     return response
