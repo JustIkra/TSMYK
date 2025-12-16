@@ -43,7 +43,7 @@ WORKDIR ${APP_HOME}
 # Note: resolvconf may fail to configure /etc/resolv.conf in Docker, but it's not critical
 # WireGuard tools are required for both WireGuard and AWG (AWG falls back to wg-quick if amneziawg is not available)
 # For full AWG obfuscation support, install amneziawg client separately (not included in standard repos)
-# OpenVPN client is required for OpenVPN support (legacy)
+# OpenVPN client is required for OpenVPN support
 # Hysteria2 is the recommended VPN proxy client
 # WeasyPrint dependencies: libglib, libgobject, libpango, libpangocairo, libgdk-pixbuf, libharfbuzz, fontconfig
 RUN apt-get update \

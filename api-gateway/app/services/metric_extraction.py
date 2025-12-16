@@ -1,5 +1,5 @@
 """
-Service for extracting metrics from report images using improved Gemini Vision prompt.
+Service for extracting metrics from report images using AI Vision.
 
 Implements the improved extraction approach with:
 - Enhanced prompt with explicit examples
@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.pool_client import GeminiPoolClient
+from app.core.ai_factory import create_ai_client, extract_text_from_response
 from app.core.config import settings
 from app.db.models import Report, ReportImage
 from app.repositories.metric import ExtractedMetricRepository, MetricDefRepository
@@ -44,8 +44,8 @@ VALUE_PATTERN = re.compile(r"^(?:10|[1-9])(?:[,.][0-9])?$")
 class ExtractedMetricData:
     """Extracted metric data before saving to DB."""
 
-    label: str  # Raw label from Gemini
-    value: str  # Raw value from Gemini
+    label: str  # Raw label from AI
+    value: str  # Raw value from AI
     normalized_label: str  # Normalized label (uppercase, trimmed)
     normalized_value: Decimal  # Parsed decimal value
     confidence: float
@@ -58,7 +58,7 @@ class MetricExtractionError(Exception):
 
 class MetricExtractionService:
     """
-    Service for extracting metrics from report images using improved Gemini Vision prompt.
+    Service for extracting metrics from report images using AI Vision.
 
     Integrates the logic from extract_improved_prompt.py script.
     """
@@ -76,33 +76,21 @@ class MetricExtractionService:
         self.participant_metric_repo = ParticipantMetricRepository(db)
         self.mapping_service = get_metric_mapping_service()
 
-        # Initialize Gemini client with all API keys
-        api_keys = settings.gemini_keys_list
-        if not api_keys:
-            raise ValueError("No Gemini API keys configured")
+        # Initialize AI client (auto-selects provider based on settings)
+        logger.info(f"Initializing AI client with provider: {settings.ai_provider}")
 
-        logger.info(f"Initializing GeminiPoolClient with {len(api_keys)} API keys")
-
-        self.gemini_client = GeminiPoolClient(
-            api_keys=api_keys,
-            model_text=settings.gemini_model_text,
-            model_vision=settings.gemini_model_vision,
-            timeout_s=60,
-            max_retries=3,
-            offline=settings.env in ("test", "ci"),
-            qps_per_key=settings.gemini_qps_per_key,
-            burst_multiplier=settings.gemini_burst_multiplier,
-            strategy=settings.gemini_strategy,
-        )
+        self.ai_client = create_ai_client()
 
         # Delay between requests (in seconds) to avoid rate limits
         self.request_delay = 0.5
 
-        # Image combination limits
-        self.max_combined_width = 4000
-        self.max_combined_height = 16000
+        # Image combination limits - optimized for better OCR quality
+        self.max_combined_width = 3000  # Reduced to preserve quality
+        self.max_combined_height = 32000  # Large limit, will split into up to 12 groups
+        self.max_images_per_group = 2  # Fewer images per group = better quality
+        self.max_groups = 12  # Up to 12 groups for better extraction
         self.max_image_size_mb = 20  # Gemini Vision limit
-        self.image_padding = 20  # Padding between images in pixels
+        self.image_padding = 30  # Increased padding for better visual separation
 
     async def extract_metrics_from_report_images(
         self,
@@ -217,24 +205,22 @@ class MetricExtractionService:
                         "errors": errors,
                     }
 
-                # Combine images into groups (1-2 combined images)
+                # Combine images into groups (up to 4 groups)
                 # Store image IDs for each group
                 combined_groups_data: list[tuple[bytes, list[str]]] = []
                 combined_groups_bytes = self._combine_images_into_groups(processed_images)
 
                 # Create mapping: group -> list of image IDs in that group
-                # For simplicity, if split into 2 groups, first half goes to group 1, second to group 2
-                if len(combined_groups_bytes) == 1:
-                    # All images in one group
-                    image_ids = [img_id for _, img_id in processed_images]
-                    combined_groups_data.append((combined_groups_bytes[0], image_ids))
-                else:
-                    # Split into 2 groups
-                    mid_point = len(processed_images) // 2
-                    group1_ids = [img_id for _, img_id in processed_images[:mid_point]]
-                    group2_ids = [img_id for _, img_id in processed_images[mid_point:]]
-                    combined_groups_data.append((combined_groups_bytes[0], group1_ids))
-                    combined_groups_data.append((combined_groups_bytes[1], group2_ids))
+                # Split image IDs evenly across groups
+                num_groups = len(combined_groups_bytes)
+                num_images = len(processed_images)
+                images_per_group = (num_images + num_groups - 1) // num_groups
+
+                for group_idx, group_bytes in enumerate(combined_groups_bytes):
+                    start_idx = group_idx * images_per_group
+                    end_idx = min(start_idx + images_per_group, num_images)
+                    group_ids = [img_id for _, img_id in processed_images[start_idx:end_idx]]
+                    combined_groups_data.append((group_bytes, group_ids))
 
                 logger.info(
                     f"Combined {len(processed_images)} images into {len(combined_groups_data)} group(s)"
@@ -336,7 +322,7 @@ class MetricExtractionService:
                     )
                     continue
 
-                # Save to extracted_metric table (legacy)
+                # Save to extracted_metric table
                 await self.extracted_metric_repo.create_or_update(
                     report_id=report_id,
                     metric_def_id=metric_def.id,
@@ -389,24 +375,25 @@ class MetricExtractionService:
                     )
                     raise
 
-        # Log pool statistics
-        pool_stats = self.gemini_client.get_pool_stats()
-        logger.info("=" * 80)
-        logger.info("Gemini API Key Pool Statistics:")
-        logger.info(f"  Total keys: {pool_stats.total_keys}")
-        logger.info(f"  Healthy keys: {pool_stats.healthy_keys}")
-        logger.info(f"  Degraded keys: {pool_stats.degraded_keys}")
-        logger.info(f"  Failed keys: {pool_stats.failed_keys}")
-        logger.info(f"  Total requests: {pool_stats.total_requests}")
-        logger.info(f"  Successful requests: {pool_stats.total_successes}")
-        logger.info(f"  Failed requests: {pool_stats.total_failures}")
+        # Log pool statistics (if using pool client)
+        if hasattr(self.ai_client, 'get_pool_stats'):
+            pool_stats = self.ai_client.get_pool_stats()
+            logger.info("=" * 80)
+            logger.info("AI API Key Pool Statistics:")
+            logger.info(f"  Total keys: {pool_stats.total_keys}")
+            logger.info(f"  Healthy keys: {pool_stats.healthy_keys}")
+            logger.info(f"  Degraded keys: {pool_stats.degraded_keys}")
+            logger.info(f"  Failed keys: {pool_stats.failed_keys}")
+            logger.info(f"  Total requests: {pool_stats.total_requests}")
+            logger.info(f"  Successful requests: {pool_stats.total_successes}")
+            logger.info(f"  Failed requests: {pool_stats.total_failures}")
 
-        # Calculate total rate limit errors from per-key stats
-        total_rate_limit_errors = sum(
-            key_stat.get("rate_limit_errors", 0) for key_stat in pool_stats.per_key_stats
-        )
-        logger.info(f"  Rate limited requests: {total_rate_limit_errors}")
-        logger.info("=" * 80)
+            # Calculate total rate limit errors from per-key stats
+            total_rate_limit_errors = sum(
+                key_stat.get("rate_limit_errors", 0) for key_stat in pool_stats.per_key_stats
+            )
+            logger.info(f"  Rate limited requests: {total_rate_limit_errors}")
+            logger.info("=" * 80)
 
         # Log mapping statistics
         logger.info("=" * 80)
@@ -441,7 +428,8 @@ class MetricExtractionService:
         self, processed_images: list[tuple[Image.Image, str]]
     ) -> list[bytes]:
         """
-        Combine images into 1-2 groups based on size limits.
+        Combine images into groups based on max_images_per_group limit.
+        Images are kept in original quality without resizing.
 
         Args:
             processed_images: List of (PIL Image, image_id) tuples
@@ -452,51 +440,41 @@ class MetricExtractionService:
         if not processed_images:
             return []
 
-        # Normalize image widths to a common width for better readability
-        # Use the maximum width as target, but cap at max_combined_width
-        max_width = max(img.width for img, _ in processed_images)
-        target_width = min(max_width, self.max_combined_width)
+        # Keep images in original size - no resizing for better OCR quality
+        original_images: list[Image.Image] = [img for img, _ in processed_images]
 
-        # Normalize all images to target width (maintain aspect ratio)
-        normalized_images: list[Image.Image] = []
-        for img, _ in processed_images:
-            if img.width != target_width:
-                # Calculate new height maintaining aspect ratio
-                aspect_ratio = img.height / img.width
-                new_height = int(target_width * aspect_ratio)
-                img = img.resize((target_width, new_height), Image.Resampling.LANCZOS)
-            normalized_images.append(img)
+        # Split into groups by max_images_per_group (up to max_groups)
+        max_per_group = getattr(self, 'max_images_per_group', 2)
+        max_groups = getattr(self, 'max_groups', 6)
+        num_images = len(original_images)
 
-        # Calculate total height needed
-        total_height = sum(img.height for img in normalized_images)
-        total_height += self.image_padding * (len(normalized_images) - 1)
-
-        # Check if we need to split into multiple groups
-        if total_height <= self.max_combined_height:
+        if num_images <= max_per_group:
             # All images fit in one group
-            return [self._combine_images_vertically(normalized_images)]
-        else:
-            # Split into 2 groups
-            logger.info(
-                f"Total height {total_height}px exceeds limit {self.max_combined_height}px, "
-                f"splitting into 2 groups"
-            )
+            return [self._combine_images_vertically(original_images)]
 
-            # Split images roughly in half
-            mid_point = len(normalized_images) // 2
-            group1_images = normalized_images[:mid_point]
-            group2_images = normalized_images[mid_point:]
+        # Calculate number of groups needed (up to max_groups)
+        num_groups = min(max_groups, (num_images + max_per_group - 1) // max_per_group)
+        images_per_group = (num_images + num_groups - 1) // num_groups
 
-            combined_groups = []
-            for group_images in [group1_images, group2_images]:
-                if group_images:
-                    combined_groups.append(self._combine_images_vertically(group_images))
+        logger.info(
+            f"Splitting {num_images} images into {num_groups} groups "
+            f"(~{images_per_group} images per group, original quality)"
+        )
 
-            return combined_groups
+        combined_groups = []
+        for i in range(num_groups):
+            start_idx = i * images_per_group
+            end_idx = min(start_idx + images_per_group, num_images)
+            group_images = original_images[start_idx:end_idx]
+            if group_images:
+                combined_groups.append(self._combine_images_vertically(group_images))
+
+        return combined_groups
 
     def _combine_images_vertically(self, images: list[Image.Image]) -> bytes:
         """
-        Combine images vertically with padding.
+        Combine images vertically with padding on white background.
+        Images are kept in original quality without compression.
 
         Args:
             images: List of PIL Images to combine
@@ -508,9 +486,12 @@ class MetricExtractionService:
             raise ValueError("No images to combine")
 
         if len(images) == 1:
-            # Single image, just return it
+            # Single image - ensure white background
+            img = images[0]
+            if img.mode in ("RGBA", "LA", "P"):
+                img = self._ensure_white_background(img)
             output = io.BytesIO()
-            images[0].save(output, format="PNG")
+            img.save(output, format="PNG")
             return output.getvalue()
 
         # Calculate dimensions
@@ -524,59 +505,55 @@ class MetricExtractionService:
         # Paste images vertically with padding
         y_offset = 0
         for img in images:
+            # Ensure white background for transparent images
+            if img.mode in ("RGBA", "LA", "P"):
+                img = self._ensure_white_background(img)
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
             # Center image horizontally if narrower than max_width
             x_offset = (max_width - img.width) // 2
             combined.paste(img, (x_offset, y_offset))
             y_offset += img.height + self.image_padding
 
-        # Save to bytes
+        # Save to bytes - no compression, original quality
         output = io.BytesIO()
-        combined.save(output, format="PNG", optimize=True)
+        combined.save(output, format="PNG")
         combined_bytes = output.getvalue()
 
-        # Check size limit
+        # Log size info (no compression even if large)
         size_mb = len(combined_bytes) / (1024 * 1024)
-        if size_mb > self.max_image_size_mb:
-            logger.warning(
-                f"Combined image size {size_mb:.2f}MB exceeds limit {self.max_image_size_mb}MB, "
-                f"compressing..."
-            )
-            # Compress by reducing quality/size
-            combined = self._compress_image(combined, target_size_mb=self.max_image_size_mb)
-            output = io.BytesIO()
-            combined.save(output, format="PNG", optimize=True)
-            combined_bytes = output.getvalue()
-            logger.info(f"Compressed to {len(combined_bytes) / (1024 * 1024):.2f}MB")
+        logger.info(f"Combined image size: {size_mb:.2f}MB ({max_width}x{total_height}px)")
 
         return combined_bytes
 
-    def _compress_image(self, img: Image.Image, target_size_mb: float) -> Image.Image:
+    def _ensure_white_background(self, img: Image.Image) -> Image.Image:
         """
-        Compress image to fit within target size.
+        Convert image with transparency to RGB with white background.
 
         Args:
-            img: PIL Image to compress
-            target_size_mb: Target size in MB
+            img: PIL Image (may have transparency)
 
         Returns:
-            Compressed PIL Image
+            RGB image with white background
         """
-        # Try reducing dimensions first
-        current_size_mb = len(img.tobytes()) / (1024 * 1024)
-        if current_size_mb <= target_size_mb:
-            return img
+        if img.mode == "P":
+            if "transparency" in img.info:
+                img = img.convert("RGBA")
+            else:
+                return img.convert("RGB")
 
-        # Calculate scale factor
-        scale_factor = (target_size_mb / current_size_mb) ** 0.5
-        new_width = int(img.width * scale_factor)
-        new_height = int(img.height * scale_factor)
+        if img.mode in ("RGBA", "LA"):
+            # Create white background
+            white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+            if img.mode == "LA":
+                # Convert LA to RGBA
+                rgba_img = img.convert("RGBA")
+                img = rgba_img
+            # Composite on white background
+            return Image.alpha_composite(white_bg, img).convert("RGB")
 
-        # Ensure minimum dimensions
-        new_width = max(new_width, 800)
-        new_height = max(new_height, 600)
-
-        logger.info(f"Compressing image from {img.width}x{img.height} to {new_width}x{new_height}")
-        return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        return img.convert("RGB") if img.mode != "RGB" else img
 
     async def _load_image_data(self, img: ReportImage) -> bytes:
         """Load image data from storage."""
@@ -699,7 +676,7 @@ class MetricExtractionService:
         Returns:
             List of dicts with 'label' and 'value' keys
         """
-        response = await self.gemini_client.generate_from_image(
+        response = await self.ai_client.generate_from_image(
             prompt=IMPROVED_VISION_PROMPT,
             image_data=image_data,
             mime_type="image/png",
@@ -707,10 +684,12 @@ class MetricExtractionService:
             timeout=60,
         )
 
-        # Parse response
+        # Parse response (handles both Gemini and OpenRouter formats)
         try:
-            text = response["candidates"][0]["content"]["parts"][0]["text"]
+            text = extract_text_from_response(response)
+            logger.debug(f"AI Vision raw response text: {text[:2000] if len(text) > 2000 else text}")
             data = json.loads(text)
+            logger.debug(f"Parsed JSON keys: {list(data.keys())}")
             metrics = data.get("metrics", [])
 
             if not isinstance(metrics, list):
@@ -719,8 +698,8 @@ class MetricExtractionService:
 
             return metrics
 
-        except (KeyError, json.JSONDecodeError, IndexError) as e:
-            logger.error(f"Failed to parse Gemini response: {e}")
+        except (KeyError, json.JSONDecodeError, IndexError, ValueError) as e:
+            logger.error(f"Failed to parse AI response: {e}")
             return []
 
     def _validate_and_normalize(
@@ -774,4 +753,4 @@ class MetricExtractionService:
 
     async def close(self):
         """Close resources."""
-        await self.gemini_client.close()
+        await self.ai_client.close()

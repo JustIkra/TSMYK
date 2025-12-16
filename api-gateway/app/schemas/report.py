@@ -60,3 +60,14 @@ class ReportListResponse(BaseModel):
 
     items: list[ReportResponse]
     total: int
+
+
+class ReportImageResponse(BaseModel):
+    """Response schema for report images with base64 data URL."""
+
+    id: UUID
+    filename: str
+    data_url: str = Field(..., description="Base64-encoded data URL (data:image/png;base64,...)")
+    page_number: int | None = None
+
+    model_config = {"from_attributes": True}

@@ -31,8 +31,8 @@ if [ "$vpn_flag" = "1" ] || [ "$vpn_flag" = "true" ] || [ "$vpn_flag" = "yes" ] 
     fi
     echo "VPN initialized successfully."
 else
-    echo "WARNING: VPN is disabled (VPN_ENABLED=0). Gemini API may not be accessible due to geographic restrictions."
-    echo "If you see 'User location is not supported' errors, enable VPN by setting VPN_ENABLED=1"
+    echo "INFO: VPN is disabled (VPN_ENABLED=0)."
+    echo "If using Gemini API and you see 'User location is not supported' errors, enable VPN by setting VPN_ENABLED=1"
 fi
 
 echo "Starting Celery worker for extraction queue..."

@@ -91,15 +91,15 @@ METRIC_DISPLAY_NAMES_RU: Final[dict[str, str]] = {
     "emotional_stability": "Уравновешенность",
     "erudition": "Эрудиция",
     # Управленческие компетенции
-    "systemic_thinking": "Системное мышление",
+    "systems_thinking": "Системное мышление",
     "influence": "Влияние",
     "delegation": "Делегирование",
     "management_decision_making": "Принятие управленческих решений",
     "control": "Контроль",
     "work_organization": "Организация работы",
     "business_communication": "Деловая коммуникация",
-    "leadership_motivation": "Мотивация к руководству",
-    "leadership_potential": "Потенциал к руководству",
+    "management_motivation": "Мотивация к руководству",
+    "management_potential": "Потенциал к руководству",
 }
 
 

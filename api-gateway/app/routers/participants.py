@@ -302,7 +302,7 @@ async def get_participant_scoring_history(
         if result.dev_areas:
             dev_areas = [MetricItem(**item) for item in result.dev_areas]
 
-        # Handle legacy format migration: old (strings) → new (dicts with priority)
+        # Handle format migration for recommendations
         recommendations = None
         if result.recommendations:
             if isinstance(result.recommendations, list):

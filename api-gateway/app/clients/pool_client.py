@@ -13,7 +13,6 @@ from typing import Any, Literal
 
 from app.clients.exceptions import (
     GeminiClientError,
-    GeminiLocationError,
     GeminiRateLimitError,
     GeminiServiceError,
 )
@@ -62,7 +61,6 @@ class GeminiPoolClient:
         model_vision: str = "gemini-2.5-flash",
         timeout_s: int = 30,
         max_retries: int = 3,
-        offline: bool = False,
         transport: GeminiTransport | None = None,
         qps_per_key: float = 0.15,
         burst_multiplier: float = 8.1,
@@ -79,7 +77,6 @@ class GeminiPoolClient:
             model_vision: Model name for vision tasks
             timeout_s: Default request timeout in seconds
             max_retries: Maximum retry attempts for transient errors
-            offline: Disable external network calls (test/ci mode)
             transport: Custom transport (for testing)
             qps_per_key: Rate limit per key (queries per second)
             burst_multiplier: Burst size multiplier (burst_size = qps * multiplier)
@@ -97,7 +94,6 @@ class GeminiPoolClient:
         self.model_vision = model_vision
         self.timeout_s = timeout_s
         self.max_retries = max_retries
-        self.offline = offline
         self.transport = transport
 
         # Initialize key pool
@@ -119,7 +115,6 @@ class GeminiPoolClient:
                 "total_keys": len(api_keys),
                 "qps_per_key": qps_per_key,
                 "strategy": strategy,
-                "offline": offline,
             },
         )
 
@@ -139,7 +134,6 @@ class GeminiPoolClient:
                 model_vision=self.model_vision,
                 timeout_s=self.timeout_s,
                 max_retries=0,  # Disable retry - pool handles it
-                offline=self.offline,
                 transport=self.transport,
             )
 
@@ -299,31 +293,6 @@ class GeminiPoolClient:
                 # Continue with next key (service errors don't block keys)
                 continue
 
-            except GeminiLocationError as e:
-                # Location errors affect all keys - no point trying others
-                # This is a configuration issue (VPN not enabled/configured)
-                last_exception = e
-                latency_seconds = time.time() - start_time
-                response_code = e.status_code if hasattr(e, "status_code") else None
-
-                # Record failure for all attempted keys
-                self._pool.record_failure(key_metrics, latency_seconds=latency_seconds, response_code=response_code)
-
-                logger.error(
-                    "pool_location_error",
-                    extra={
-                        "operation": operation,
-                        "key_id": key_metrics.key_id,
-                        "attempt": attempts,
-                        "error": str(e),
-                        "latency_ms": round(latency_seconds * 1000, 2),
-                        "response_code": response_code,
-                    },
-                )
-
-                # Fail immediately - location errors require VPN configuration
-                raise
-
             except GeminiClientError as e:
                 last_exception = e
                 latency_seconds = time.time() - start_time
@@ -460,6 +429,5 @@ class GeminiPoolClient:
             f"healthy={stats.healthy_keys}, "
             f"degraded={stats.degraded_keys}, "
             f"failed={stats.failed_keys}, "
-            f"model_text={self.model_text}, "
-            f"offline={self.offline})"
+            f"model_text={self.model_text})"
         )

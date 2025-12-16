@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.clients import GeminiClient, GeminiPoolClient
+from app.core.ai_factory import AIClient
 from app.repositories.metric import ExtractedMetricRepository
 from app.repositories.participant_metric import ParticipantMetricRepository
 from app.repositories.prof_activity import ProfActivityRepository
@@ -27,11 +27,11 @@ class ScoringService:
     """Service for calculating professional fitness scores."""
 
     def __init__(
-        self, db: AsyncSession, gemini_client: Union[GeminiClient, GeminiPoolClient, None] = None
+        self, db: AsyncSession, ai_client: AIClient | None = None
     ):
         self.db = db
-        self.gemini_client = gemini_client
-        self.extracted_metric_repo = ExtractedMetricRepository(db)  # Legacy, for backward compatibility
+        self.ai_client = ai_client
+        self.extracted_metric_repo = ExtractedMetricRepository(db)
         self.participant_metric_repo = ParticipantMetricRepository(db)
         self.prof_activity_repo = ProfActivityRepository(db)
         self.scoring_result_repo = ScoringResultRepository(db)
@@ -143,7 +143,7 @@ class ScoringService:
         # Save scoring result first, then trigger async recommendations generation
         recommendations = None
         recommendations_status = "pending"
-        if not settings.ai_recommendations_enabled or self.gemini_client is None:
+        if not settings.ai_recommendations_enabled or self.ai_client is None:
             recommendations_status = "disabled"
 
         # 10. Save scoring result to database (without recommendations initially)

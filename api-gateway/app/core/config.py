@@ -49,9 +49,6 @@ class Settings(BaseSettings):
     celery_eager_propagates_exceptions: bool = Field(
         default=False, description="Propagate exceptions in eager mode (test/ci mode)"
     )
-    allow_external_network: bool = Field(
-        default=True, description="Allow external network calls (disabled in test/ci)"
-    )
     deterministic_seed: int = Field(
         default=42, description="Seed for random number generators in deterministic mode"
     )
@@ -161,6 +158,43 @@ class Settings(BaseSettings):
         default=True, description="Enable Gemini Vision processing pipeline"
     )
 
+    # OpenRouter Configuration
+    openrouter_api_keys: str = Field(
+        default="", description="Comma-separated OpenRouter API keys for rotation"
+    )
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1", description="OpenRouter API base URL"
+    )
+    openrouter_app_url: str = Field(
+        default="", description="HTTP-Referer header for OpenRouter"
+    )
+    openrouter_app_name: str = Field(
+        default="Workers Proficiency Assessment", description="X-Title header for OpenRouter"
+    )
+    openrouter_model_text: str = Field(
+        default="google/gemini-2.0-flash-001", description="OpenRouter model for text generation"
+    )
+    openrouter_model_vision: str = Field(
+        default="google/gemini-2.0-flash-001", description="OpenRouter model for vision tasks"
+    )
+    openrouter_qps_per_key: float = Field(
+        default=0.15, description="QPS limit per API key"
+    )
+    openrouter_burst_multiplier: float = Field(
+        default=8.1, description="Burst size multiplier for rate limiting"
+    )
+    openrouter_timeout_s: int = Field(
+        default=30, description="OpenRouter API timeout in seconds"
+    )
+    openrouter_strategy: Literal["ROUND_ROBIN", "LEAST_BUSY"] = Field(
+        default="ROUND_ROBIN", description="Key rotation strategy"
+    )
+
+    # AI Provider Selection
+    ai_provider: Literal["gemini", "openrouter"] = Field(
+        default="openrouter", description="AI provider to use: gemini or openrouter"
+    )
+
     # Computed Properties
     def _parse_comma_separated(self, value: str) -> list[str]:
         """Helper to parse comma-separated strings."""
@@ -189,11 +223,6 @@ class Settings(BaseSettings):
         return self.env == "ci"
 
     @property
-    def is_offline(self) -> bool:
-        """Check if external network is disabled (test/ci mode)."""
-        return not self.allow_external_network
-
-    @property
     def cors_origins(self) -> list[str]:
         """Get parsed CORS origins."""
         if self.cors_allow_all:
@@ -204,6 +233,11 @@ class Settings(BaseSettings):
     def gemini_keys_list(self) -> list[str]:
         """Get parsed Gemini API keys as list."""
         return self._parse_comma_separated(self.gemini_api_keys)
+
+    @property
+    def openrouter_keys_list(self) -> list[str]:
+        """Get parsed OpenRouter API keys as list."""
+        return self._parse_comma_separated(self.openrouter_api_keys)
 
     @property
     def report_max_size_bytes(self) -> int:
@@ -251,10 +285,6 @@ class Settings(BaseSettings):
 
             if not self.celery_eager_propagates_exceptions:
                 self.celery_eager_propagates_exceptions = True
-
-            # Disable external network calls in tests
-            if self.allow_external_network:
-                self.allow_external_network = False
 
             # Set default frozen time for tests if not set
             if not self.frozen_time:
@@ -332,13 +362,20 @@ def validate_config() -> None:
             if not wg_config.exists():
                 raise ValueError(f"WireGuard config not found: {settings.wg_config_path}")
 
-    # Check Gemini keys if AI features enabled
+    # Check API keys based on selected provider
     if settings.ai_recommendations_enabled or settings.ai_vision_fallback_enabled:
-        if not settings.gemini_keys_list:
-            raise ValueError(
-                "GEMINI_API_KEYS required when AI features are enabled. "
-                "Get free keys at https://aistudio.google.com/apikey"
-            )
+        if settings.ai_provider == "openrouter":
+            if not settings.openrouter_keys_list:
+                raise ValueError(
+                    "OPENROUTER_API_KEYS required when AI_PROVIDER=openrouter. "
+                    "Get keys at https://openrouter.ai/keys"
+                )
+        else:  # gemini
+            if not settings.gemini_keys_list:
+                raise ValueError(
+                    "GEMINI_API_KEYS required when AI_PROVIDER=gemini. "
+                    "Get free keys at https://aistudio.google.com/apikey"
+                )
 
     logger.info(
         "configuration_validated",
@@ -355,8 +392,6 @@ def validate_config() -> None:
         logger.info("deterministic_mode_enabled")
     if settings.celery_task_always_eager:
         logger.info("celery_eager_mode_enabled")
-    if settings.is_offline:
-        logger.info("offline_mode_enabled")
     if settings.frozen_time:
         logger.info(
             "frozen_time_active",

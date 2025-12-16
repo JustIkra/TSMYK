@@ -9,7 +9,6 @@ Provides endpoints for:
 """
 
 from decimal import Decimal
-from typing import Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,9 +16,8 @@ from pydantic import BaseModel, Field
 from typing_extensions import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients import GeminiClient, GeminiPoolClient
 from app.core.dependencies import get_current_active_user
-from app.core.gemini_factory import get_gemini_client
+from app.core.ai_factory import AIClient, get_ai_client
 from app.db.models import User
 from app.db.session import get_db
 from app.repositories.participant import ParticipantRepository
@@ -112,7 +110,7 @@ async def calculate_participant_score(
     activity_code: str = Query(..., description="Professional activity code"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    gemini_client: Union[GeminiClient, GeminiPoolClient] = Depends(get_gemini_client),
+    ai_client: AIClient = Depends(get_ai_client),
 ):
     """
     Calculate professional fitness score for a participant.
@@ -133,7 +131,7 @@ async def calculate_participant_score(
     - 404: Participant or activity not found
     - 400: Missing metrics or invalid data
     """
-    scoring_service = ScoringService(db, gemini_client=gemini_client)
+    scoring_service = ScoringService(db, ai_client=ai_client)
 
     try:
         result = await scoring_service.calculate_score(

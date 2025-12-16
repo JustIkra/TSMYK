@@ -423,6 +423,7 @@
         <MetricsEditor
           v-if="currentReportId"
           :report-id="currentReportId"
+          :report-status="currentReportStatus"
           @metrics-updated="handleMetricsUpdated"
         />
       </el-dialog>
@@ -489,6 +490,13 @@ const recommendationsRefreshInterval = ref(null)
 // Check if any report is being processed
 const hasProcessingReports = computed(() => {
   return reports.value.some(report => report.status === 'PROCESSING')
+})
+
+// Get status of the current report
+const currentReportStatus = computed(() => {
+  if (!currentReportId.value) return null
+  const report = reports.value.find(r => r.id === currentReportId.value)
+  return report?.status || null
 })
 
 const hasPendingRecommendations = computed(() => {
@@ -852,6 +860,7 @@ const viewMetrics = async (reportId) => {
 
 const handleMetricsUpdated = async () => {
   ElMessage.success('Метрики обновлены')
+  await loadReports({ silent: true })
 }
 
 const handleDeleteReport = async (reportId) => {

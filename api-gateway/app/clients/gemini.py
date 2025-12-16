@@ -1,8 +1,8 @@
 """
 Gemini API client with retry logic, timeout handling, and error mapping.
 
-Supports both text generation and vision tasks with configurable timeouts,
-exponential backoff for transient errors (429, 5xx), and offline mode for testing.
+Supports both text generation and vision tasks with configurable timeouts
+and exponential backoff for transient errors (429, 5xx).
 """
 
 from __future__ import annotations
@@ -17,8 +17,6 @@ import httpx
 from app.clients.exceptions import (
     GeminiAuthError,
     GeminiClientError,
-    GeminiLocationError,
-    GeminiOfflineError,
     GeminiRateLimitError,
     GeminiServerError,
     GeminiServiceError,
@@ -196,48 +194,7 @@ class HttpxTransport(GeminiTransport):
                 logger.error("gemini_auth_error", extra={"url": url, "status": status_code})
                 raise GeminiAuthError("Invalid or missing API key") from e
 
-            elif status_code == 400:
-                # Check for location-related errors
-                response_text = e.response.text.lower()
-                if (
-                    "user location is not supported" in response_text
-                    or "failed_precondition" in response_text
-                    or "location" in response_text and "not supported" in response_text
-                ):
-                    logger.error(
-                        "gemini_location_error",
-                        extra={"url": url, "response": e.response.text[:500]},
-                    )
-                    # Import here to avoid circular dependency
-                    from app.core.config import settings
-
-                    vpn_hint = ""
-                    if not settings.vpn_enabled:
-                        vpn_hint = (
-                            " VPN is not enabled. Consider enabling VPN_ENABLED=1 "
-                            "with proper WireGuard/AWG configuration to route traffic "
-                            "through a supported region."
-                        )
-                    else:
-                        vpn_hint = (
-                            " VPN is enabled but may not be configured correctly. "
-                            "Verify VPN connection and routing to generativelanguage.googleapis.com."
-                        )
-
-                    raise GeminiLocationError(
-                        f"User location is not supported for the API use.{vpn_hint}"
-                    ) from e
-
-                # Other 400 errors
-                logger.warning(
-                    "gemini_client_error",
-                    extra={"url": url, "status": status_code, "response": e.response.text[:500]},
-                )
-                raise GeminiValidationError(
-                    f"Client error {status_code}: {e.response.text[:200]}"
-                ) from e
-
-            elif 400 < status_code < 500:
+            elif 400 <= status_code < 500:
                 logger.warning(
                     "gemini_client_error",
                     extra={"url": url, "status": status_code, "response": e.response.text[:500]},
@@ -267,31 +224,6 @@ class HttpxTransport(GeminiTransport):
             raise GeminiClientError(f"Network error: {e}") from e
 
 
-class OfflineTransport(GeminiTransport):
-    """
-    Offline transport for test/ci environments.
-
-    Prevents accidental external network calls during testing.
-    Use MockTransport (in tests) for providing canned responses.
-    """
-
-    async def request(
-        self,
-        method: str,
-        url: str,
-        headers: dict[str, str] | None = None,
-        json: dict[str, Any] | None = None,
-        timeout: float = 30.0,
-    ) -> dict[str, Any]:
-        """Raise error to prevent external calls in offline mode."""
-        logger.error(
-            "gemini_offline_blocked",
-            extra={"url": url, "method": method},
-        )
-        raise GeminiOfflineError(
-            "External network calls disabled in offline mode. "
-            "Use MockTransport in tests or enable allow_external_network."
-        )
 
 
 class GeminiClient:
@@ -302,7 +234,6 @@ class GeminiClient:
     - Exponential backoff for 429/5xx errors
     - Configurable timeouts per request
     - Domain-specific exceptions
-    - Offline mode support (test/ci)
     - Mockable transport layer
 
     Example:
@@ -311,7 +242,6 @@ class GeminiClient:
             api_key="your-key",
             model_text="gemini-2.5-flash",
             timeout_s=30,
-            offline=False,
         )
 
         response = await client.generate_text(
@@ -330,7 +260,6 @@ class GeminiClient:
         model_vision: str = "gemini-2.5-flash",
         timeout_s: int = 30,
         max_retries: int = 3,
-        offline: bool = False,
         transport: GeminiTransport | None = None,
     ):
         """
@@ -342,21 +271,17 @@ class GeminiClient:
             model_vision: Model name for vision tasks
             timeout_s: Default request timeout in seconds
             max_retries: Maximum retry attempts for transient errors
-            offline: Disable external network calls (test/ci mode)
-            transport: Custom transport (for testing); if None, uses HttpxTransport or OfflineTransport
+            transport: Custom transport (for testing); if None, uses HttpxTransport
         """
         self.api_key = api_key
         self.model_text = model_text
         self.model_vision = model_vision
         self.timeout_s = timeout_s
         self.max_retries = max_retries
-        self.offline = offline
 
         # Initialize transport
         if transport is not None:
             self.transport = transport
-        elif offline:
-            self.transport = OfflineTransport()
         else:
             self.transport = HttpxTransport()
 
@@ -598,6 +523,5 @@ class GeminiClient:
         return (
             f"GeminiClient(model_text={self.model_text}, "
             f"model_vision={self.model_vision}, "
-            f"timeout={self.timeout_s}s, "
-            f"offline={self.offline})"
+            f"timeout={self.timeout_s}s)"
         )

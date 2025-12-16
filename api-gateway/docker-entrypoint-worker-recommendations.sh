@@ -33,8 +33,7 @@ if [ "$vpn_flag" = "1" ] || [ "$vpn_flag" = "true" ] || [ "$vpn_flag" = "yes" ] 
     fi
     echo "VPN initialized successfully."
 else
-    echo "WARNING: VPN is disabled (VPN_ENABLED=0). Gemini API may not be accessible due to geographic restrictions."
-    echo "If you see 'User location is not supported' errors, enable VPN by setting VPN_ENABLED=1"
+    echo "INFO: VPN is disabled (VPN_ENABLED=0)."
 fi
 
 ai_flag="$(printf '%s' "${AI_RECOMMENDATIONS_ENABLED:-1}" | tr '[:upper:]' '[:lower:]')"
@@ -42,18 +41,38 @@ if [ "$ai_flag" = "0" ] || [ "$ai_flag" = "false" ] || [ "$ai_flag" = "no" ] || 
     echo "WARNING: AI recommendations are disabled (AI_RECOMMENDATIONS_ENABLED=${AI_RECOMMENDATIONS_ENABLED:-0})."
     echo "Tasks in the recommendations queue will mark results as 'disabled'."
 else
-    gemini_key_count="$(python - <<'PY'
+    # Check AI provider and validate appropriate API keys
+    ai_provider="${AI_PROVIDER:-openrouter}"
+    echo "AI recommendations enabled (provider=${ai_provider})"
+
+    if [ "$ai_provider" = "openrouter" ]; then
+        key_count="$(python - <<'PY'
+import os
+keys = [k.strip() for k in os.environ.get("OPENROUTER_API_KEYS", "").split(",") if k.strip()]
+print(len(keys))
+PY
+)"
+        if [ "$key_count" = "0" ]; then
+            echo "ERROR: OPENROUTER_API_KEYS is not configured but AI recommendations are enabled with provider=openrouter." >&2
+            echo "Set OPENROUTER_API_KEYS or switch to Gemini via AI_PROVIDER=gemini or disable recommendations via AI_RECOMMENDATIONS_ENABLED=0." >&2
+            exit 1
+        else
+            echo "Detected ${key_count} OpenRouter API key(s) configured for recommendations."
+        fi
+    else
+        key_count="$(python - <<'PY'
 import os
 keys = [k.strip() for k in os.environ.get("GEMINI_API_KEYS", "").split(",") if k.strip()]
 print(len(keys))
 PY
 )"
-    if [ "$gemini_key_count" = "0" ]; then
-        echo "ERROR: GEMINI_API_KEYS is not configured but AI recommendations are enabled." >&2
-        echo "Set GEMINI_API_KEYS or disable recommendations via AI_RECOMMENDATIONS_ENABLED=0." >&2
-        exit 1
-    else
-        echo "Detected ${gemini_key_count} Gemini API key(s) configured for recommendations."
+        if [ "$key_count" = "0" ]; then
+            echo "ERROR: GEMINI_API_KEYS is not configured but AI recommendations are enabled with provider=gemini." >&2
+            echo "Set GEMINI_API_KEYS or switch to OpenRouter via AI_PROVIDER=openrouter or disable recommendations via AI_RECOMMENDATIONS_ENABLED=0." >&2
+            exit 1
+        else
+            echo "Detected ${key_count} Gemini API key(s) configured for recommendations."
+        fi
     fi
 fi
 

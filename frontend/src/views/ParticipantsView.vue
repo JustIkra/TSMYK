@@ -107,7 +107,9 @@
             class="participant-card"
             shadow="hover"
           >
-            <div class="participant-card__name">{{ participant.full_name }}</div>
+            <div class="participant-card__name">
+              {{ participant.full_name }}
+            </div>
             <div class="participant-card__info">
               <div class="participant-card__field">
                 <span class="field-label">ID:</span>

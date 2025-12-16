@@ -2,30 +2,62 @@
   <el-card class="metrics-editor">
     <template #header>
       <div class="card-header">
-        <span>Ручной ввод метрик</span>
-        <el-button
-          v-if="!isEditing"
-          type="primary"
-          size="small"
-          @click="startEditing"
-        >
-          Редактировать
-        </el-button>
-        <div v-else>
-          <el-button
+        <div class="card-header-left">
+          <span>Метрики отчёта</span>
+          <el-tag
+            v-if="reportStatus === 'PROCESSING'"
+            type="warning"
             size="small"
-            @click="cancelEditing"
+            class="status-tag"
           >
-            Отмена
+            <el-icon class="is-loading">
+              <Loading />
+            </el-icon>
+            Извлечение...
+          </el-tag>
+          <el-tag
+            v-else-if="reportStatus === 'EXTRACTED'"
+            type="success"
+            size="small"
+            class="status-tag"
+          >
+            Извлечено
+          </el-tag>
+        </div>
+        <div class="card-header-actions">
+          <el-button
+            v-if="!isEditing"
+            size="small"
+            :loading="loading"
+            @click="refreshMetrics"
+          >
+            <el-icon><Refresh /></el-icon>
+            Обновить
           </el-button>
           <el-button
+            v-if="!isEditing"
             type="primary"
             size="small"
-            :loading="saving"
-            @click="saveMetrics"
+            @click="startEditing"
           >
-            Сохранить
+            Редактировать
           </el-button>
+          <template v-else>
+            <el-button
+              size="small"
+              @click="cancelEditing"
+            >
+              Отмена
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :loading="saving"
+              @click="saveMetrics"
+            >
+              Сохранить
+            </el-button>
+          </template>
         </div>
       </div>
     </template>
@@ -48,79 +80,219 @@
       Метрики для этого отчёта ещё не извлечены. Вы можете ввести их вручную.
     </el-alert>
 
-    <el-form
-      ref="formRef"
-      :model="formData"
-      label-position="top"
-      :disabled="!isEditing"
+    <el-tabs
+      v-model="activeTab"
+      type="card"
     >
-      <el-row :gutter="20">
-        <el-col
-          v-for="metricDef in availableMetrics"
-          :key="metricDef.id"
-          :xs="24"
-          :sm="12"
-          :md="8"
-          :lg="6"
-        >
-          <el-form-item
-            :label="formatMetricLabel(metricDef)"
-            :prop="`metrics.${metricDef.id}`"
-          >
-            <MetricInput
-              v-model="formData.metrics[metricDef.id]"
-              :min="metricDef.min_value || 1"
-              :max="metricDef.max_value || 10"
-              :precision="1"
-              :step="0.1"
-              :disabled="!isEditing"
-              :show-controls="true"
-              placeholder="Введите значение (например: 7,5)"
-            />
-            <div
-              v-if="metricDef.description"
-              class="metric-description"
-            >
-              {{ metricDef.description }}
-            </div>
-          </el-form-item>
-        </el-col>
-      </el-row>
-    </el-form>
-
-    <div
-      v-if="metrics && metrics.length > 0"
-      class="metrics-info"
-    >
-      <el-divider />
-      <div class="info-row">
-        <span class="info-label">Источник данных:</span>
-        <el-tag
-          v-for="source in uniqueSources"
-          :key="source"
-          :type="getSourceType(source)"
-          size="small"
-          style="margin-left: 8px;"
-        >
-          {{ getSourceLabel(source) }}
-        </el-tag>
-      </div>
-      <div
-        v-if="lastUpdated"
-        class="info-row"
+      <el-tab-pane
+        label="Метрики"
+        name="metrics"
       >
-        <span class="info-label">Последнее обновление:</span>
-        <span>{{ formatDate(lastUpdated) }}</span>
-      </div>
-    </div>
+        <div class="metrics-filter">
+          <el-switch
+            v-model="showAllMetrics"
+            active-text="Показать все метрики"
+            inactive-text="Только заполненные"
+          />
+          <span class="metrics-count">
+            Показано: {{ filteredMetrics.length }} из {{ availableMetrics.length }}
+          </span>
+        </div>
+
+        <el-form
+          ref="formRef"
+          :model="formData"
+          label-position="top"
+          :disabled="!isEditing"
+        >
+          <el-row :gutter="20">
+            <el-col
+              v-for="metricDef in filteredMetrics"
+              :key="metricDef.id"
+              :xs="24"
+              :sm="12"
+              :md="8"
+              :lg="6"
+            >
+              <el-form-item
+                :label="formatMetricLabel(metricDef)"
+                :prop="`metrics.${metricDef.id}`"
+              >
+                <MetricInput
+                  v-model="formData.metrics[metricDef.id]"
+                  :min="metricDef.min_value || 1"
+                  :max="metricDef.max_value || 10"
+                  :precision="1"
+                  :step="0.1"
+                  :disabled="!isEditing"
+                  :show-controls="true"
+                  placeholder="Введите значение (например: 7,5)"
+                />
+                <div
+                  v-if="metricDef.description"
+                  class="metric-description"
+                >
+                  {{ metricDef.description }}
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-form>
+
+        <div
+          v-if="metrics && metrics.length > 0"
+          class="metrics-info"
+        >
+          <el-divider />
+          <div class="info-row">
+            <span class="info-label">Источник данных:</span>
+            <el-tag
+              v-for="source in uniqueSources"
+              :key="source"
+              :type="getSourceType(source)"
+              size="small"
+              style="margin-left: 8px;"
+            >
+              {{ getSourceLabel(source) }}
+            </el-tag>
+          </div>
+          <div
+            v-if="lastUpdated"
+            class="info-row"
+          >
+            <span class="info-label">Последнее обновление:</span>
+            <span>{{ formatDate(lastUpdated) }}</span>
+          </div>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane
+        label="Изображения отчёта"
+        name="images"
+      >
+        <div
+          v-if="loadingImages"
+          class="loading-container"
+        >
+          <el-icon class="is-loading">
+            <Loading />
+          </el-icon>
+          <span style="margin-left: 8px;">Загрузка изображений...</span>
+        </div>
+
+        <div
+          v-else-if="images.length === 0"
+          class="no-images"
+        >
+          <el-empty description="Изображения отсутствуют">
+            <template #image>
+              <el-icon
+                :size="60"
+                color="var(--el-color-info)"
+              >
+                <Picture />
+              </el-icon>
+            </template>
+          </el-empty>
+        </div>
+
+        <div
+          v-else
+          class="images-container"
+        >
+          <div class="image-controls">
+            <el-button-group>
+              <el-button
+                :disabled="zoomLevel <= 0.5"
+                @click="zoomOut"
+              >
+                <el-icon><ZoomOut /></el-icon>
+              </el-button>
+              <el-button @click="zoomReset">
+                {{ Math.round(zoomLevel * 100) }}%
+              </el-button>
+              <el-button
+                :disabled="zoomLevel >= 2"
+                @click="zoomIn"
+              >
+                <el-icon><ZoomIn /></el-icon>
+              </el-button>
+            </el-button-group>
+            <el-button
+              style="margin-left: 12px;"
+              @click="toggleFullscreen"
+            >
+              <el-icon><FullScreen /></el-icon>
+              Полноэкранный режим
+            </el-button>
+          </div>
+
+          <div
+            ref="carouselContainer"
+            class="carousel-wrapper"
+            :class="{ 'fullscreen': isFullscreen }"
+          >
+            <el-carousel
+              :height="carouselHeight + 'px'"
+              arrow="always"
+              indicator-position="outside"
+            >
+              <el-carousel-item
+                v-for="image in images"
+                :key="image.id"
+              >
+                <div class="image-slide">
+                  <div
+                    class="image-wrapper"
+                    :style="{ transform: `scale(${zoomLevel})` }"
+                  >
+                    <img
+                      :src="image.data_url"
+                      :alt="image.filename"
+                      class="report-image"
+                    >
+                  </div>
+                  <div class="image-info">
+                    <span class="image-filename">{{ image.filename }}</span>
+                    <span
+                      v-if="image.page_number"
+                      class="image-page"
+                    >
+                      Страница {{ image.page_number }}
+                    </span>
+                  </div>
+                </div>
+              </el-carousel-item>
+            </el-carousel>
+            <el-button
+              v-if="isFullscreen"
+              class="exit-fullscreen"
+              circle
+              @click="toggleFullscreen"
+            >
+              <el-icon><Close /></el-icon>
+            </el-button>
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </el-card>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import {
+  ZoomIn,
+  ZoomOut,
+  FullScreen,
+  Loading,
+  Picture,
+  Close,
+  Refresh
+} from '@element-plus/icons-vue'
 import MetricInput from './MetricInput.vue'
-import { metricsApi } from '@/api'
+import { metricsApi, reportsApi } from '@/api'
 import { parseNumber, formatForApi } from '@/utils/numberFormat'
 import { formatMetricLabel } from '@/utils/metricNames'
 
@@ -128,6 +300,10 @@ const props = defineProps({
   reportId: {
     type: String,
     required: true
+  },
+  reportStatus: {
+    type: String,
+    default: null
   }
 })
 
@@ -138,13 +314,62 @@ const loading = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
 const error = ref(null)
+const showAllMetrics = ref(false)
 
 const availableMetrics = ref([])
 const metrics = ref([])
 const formData = ref({ metrics: {} })
 const originalData = ref({})
 
+// Images state
+const activeTab = ref('metrics')
+const images = ref([])
+const loadingImages = ref(false)
+const zoomLevel = ref(1)
+const isFullscreen = ref(false)
+const carouselContainer = ref(null)
+const carouselHeight = ref(500)
+
+// Polling state
+const pollingInterval = ref(null)
+
 // Computed
+// Фильтруем метрики: показываем только те, у которых есть реальное значение
+// (скрываем пустые метрики без маппинга и с нулевыми значениями)
+// Либо показываем все, если включен режим "Показать все метрики"
+const filteredMetrics = computed(() => {
+  if (!availableMetrics.value || availableMetrics.value.length === 0) {
+    return []
+  }
+
+  // Если включен режим "показать все" - возвращаем все метрики
+  if (showAllMetrics.value) {
+    return availableMetrics.value
+  }
+
+  // Иначе показываем только метрики с реальными значениями
+  // Собираем ID метрик с реальными (не нулевыми) значениями
+  const extractedMetricIds = new Set(
+    metrics.value
+      .filter(m => {
+        const val = parseFloat(String(m.value).replace(',', '.'))
+        return !isNaN(val) && val > 0
+      })
+      .map(m => m.metric_def_id)
+  )
+
+  // Показываем только метрики с реальными извлечёнными значениями или заполненными вручную
+  return availableMetrics.value.filter(metricDef => {
+    const hasExtractedValue = extractedMetricIds.has(metricDef.id)
+    const formValue = formData.value.metrics[metricDef.id]
+    const hasFormValue = formValue !== undefined &&
+                         formValue !== null &&
+                         formValue !== '' &&
+                         parseFloat(String(formValue).replace(',', '.')) > 0
+    return hasExtractedValue || hasFormValue
+  })
+})
+
 const uniqueSources = computed(() => {
   if (!metrics.value || metrics.value.length === 0) return []
   return [...new Set(metrics.value.map(m => m.source))]
@@ -191,8 +416,28 @@ const loadMetrics = async () => {
   }
 }
 
+const refreshMetrics = async () => {
+  await loadMetrics()
+  ElMessage.success('Метрики обновлены')
+}
+
+const startPolling = () => {
+  if (pollingInterval.value) return
+  pollingInterval.value = setInterval(async () => {
+    await loadMetrics()
+  }, 5000)
+}
+
+const stopPolling = () => {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value)
+    pollingInterval.value = null
+  }
+}
+
 const startEditing = () => {
   isEditing.value = true
+  showAllMetrics.value = true // Автоматически показываем все метрики в режиме редактирования
   originalData.value = JSON.parse(JSON.stringify(formData.value.metrics))
 }
 
@@ -287,16 +532,92 @@ const formatDate = (date) => {
   })
 }
 
+// Images methods
+const loadReportImages = async () => {
+  loadingImages.value = true
+  error.value = null
+  try {
+    images.value = await reportsApi.getReportImages(props.reportId)
+  } catch (err) {
+    console.error('Failed to load report images:', err)
+    error.value = 'Не удалось загрузить изображения отчёта'
+    ElMessage.error('Не удалось загрузить изображения отчёта')
+  } finally {
+    loadingImages.value = false
+  }
+}
+
+const zoomIn = () => {
+  if (zoomLevel.value < 2) {
+    zoomLevel.value = Math.min(2, zoomLevel.value + 0.25)
+  }
+}
+
+const zoomOut = () => {
+  if (zoomLevel.value > 0.5) {
+    zoomLevel.value = Math.max(0.5, zoomLevel.value - 0.25)
+  }
+}
+
+const zoomReset = () => {
+  zoomLevel.value = 1
+}
+
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+  if (isFullscreen.value) {
+    carouselHeight.value = window.innerHeight - 100
+  } else {
+    carouselHeight.value = 500
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   await loadMetricDefs()
-  await loadMetrics()
+  // loadMetrics() вызывается через watch на reportStatus
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 // Watch для изменения reportId
 watch(() => props.reportId, async (newId) => {
   if (newId) {
     await loadMetrics()
+    // Reset images when report changes
+    images.value = []
+  }
+})
+
+// Watch для reportStatus - автоматическое обновление при PROCESSING
+watch(() => props.reportStatus, async (newStatus, oldStatus) => {
+  // При первой инициализации (oldStatus === undefined) всегда загружаем метрики
+  if (!oldStatus) {
+    await loadMetrics()
+  }
+
+  if (newStatus === 'PROCESSING') {
+    startPolling()
+    // Если переходим в PROCESSING из другого статуса (переизвлечение) - перезагружаем метрики
+    if (oldStatus && oldStatus !== 'PROCESSING') {
+      await loadMetrics()
+    }
+  } else {
+    stopPolling()
+    // Когда извлечение завершено (EXTRACTED), всегда загружаем финальные метрики
+    // Это исправляет баг, когда метрики не обновлялись после переизвлечения
+    if (newStatus === 'EXTRACTED' && oldStatus && oldStatus !== 'EXTRACTED') {
+      await loadMetrics()
+    }
+  }
+}, { immediate: true })
+
+// Watch для загрузки изображений при переключении на вкладку
+watch(activeTab, async (newTab) => {
+  if (newTab === 'images' && images.value.length === 0 && !loadingImages.value) {
+    await loadReportImages()
   }
 })
 </script>
@@ -310,6 +631,39 @@ watch(() => props.reportId, async (newId) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metrics-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+
+.metrics-count {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
 }
 
 .metric-description {
@@ -334,5 +688,106 @@ watch(() => props.reportId, async (newId) => {
   font-weight: 500;
   color: var(--el-text-color-secondary);
   margin-right: 8px;
+}
+
+/* Images tab styles */
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--el-text-color-secondary);
+}
+
+.no-images {
+  padding: 20px;
+}
+
+.images-container {
+  padding-top: 12px;
+}
+
+.image-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.carousel-wrapper {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.carousel-wrapper.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.95);
+  padding: 20px;
+}
+
+.image-slide {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  transition: transform 0.3s ease;
+}
+
+.report-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.image-info {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.image-filename {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.image-page {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}
+
+.exit-fullscreen {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+}
+
+.fullscreen .image-info {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+}
+
+.fullscreen .image-filename,
+.fullscreen .image-page {
+  color: white;
 }
 </style>

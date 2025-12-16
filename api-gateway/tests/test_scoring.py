@@ -671,14 +671,13 @@ async def test_api_calculate_score_success(
     """
     headers = get_auth_header(active_user)
 
-    # Mock the gemini client dependency and disable AI recommendations
+    # Disable AI recommendations for this test
     with patch("app.core.config.settings.ai_recommendations_enabled", False):
-        with patch("app.core.gemini_factory.get_gemini_client", return_value=None):
-            response = await client.post(
-                f"/api/scoring/participants/{test_participant.id}/calculate",
-                params={"activity_code": developer_activity.code},
-                headers=headers,
-            )
+        response = await client.post(
+            f"/api/scoring/participants/{test_participant.id}/calculate",
+            params={"activity_code": developer_activity.code},
+            headers=headers,
+        )
 
     assert response.status_code == 200
 
@@ -1143,15 +1142,14 @@ async def test_multiple_scoring_calculations_create_history(
     """
     headers = get_auth_header(active_user)
 
-    # Mock the gemini client dependency and disable AI recommendations
+    # Disable AI recommendations for this test
     with patch("app.core.config.settings.ai_recommendations_enabled", False):
-        with patch("app.core.gemini_factory.get_gemini_client", return_value=None):
-            # Calculate score multiple times
-            for _ in range(3):
-                response = await client.post(
-                    f"/api/scoring/participants/{test_participant.id}/calculate",
-                    params={"activity_code": developer_activity.code},
-                    headers=headers,
+        # Calculate score multiple times
+        for _ in range(3):
+            response = await client.post(
+                f"/api/scoring/participants/{test_participant.id}/calculate",
+                params={"activity_code": developer_activity.code},
+                headers=headers,
                 )
                 assert response.status_code == 200
 

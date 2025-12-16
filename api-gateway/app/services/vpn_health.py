@@ -456,14 +456,7 @@ async def gather_vpn_health(
         hysteria2 = await hysteria2_task
 
         # Perform Gemini probe
-        if not settings.allow_external_network:
-            probe_result = GeminiProbeResult(
-                domain=domain,
-                status=GeminiProbeStatus.SKIPPED,
-                error="External network access disabled.",
-            )
-        else:
-            probe_result = await perform_gemini_probe(domain)
+        probe_result = await perform_gemini_probe(domain)
 
         # Determine health status
         details: list[str] = []
@@ -503,14 +496,7 @@ async def gather_vpn_health(
         )
 
         # Perform Gemini probe
-        if not settings.allow_external_network:
-            probe_result = GeminiProbeResult(
-                domain=domain,
-                status=GeminiProbeStatus.SKIPPED,
-                error="External network access disabled.",
-            )
-        else:
-            probe_result = await perform_gemini_probe(domain)
+        probe_result = await perform_gemini_probe(domain)
 
         # Determine health status
         details: list[str] = []

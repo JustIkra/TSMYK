@@ -21,7 +21,7 @@ from typing import Any
 
 from PIL import Image
 
-from app.clients.pool_client import GeminiPoolClient
+from app.core.ai_factory import create_ai_client, extract_text_from_response
 from app.core.config import settings
 from app.services.vision_prompts import IMPROVED_VISION_PROMPT
 
@@ -68,34 +68,19 @@ class VisionMetricExtractor:
     - Exponential backoff for 503 errors
     """
 
-    def __init__(self, gemini_client: GeminiPoolClient | None = None):
+    def __init__(self, ai_client=None):
         """
         Initialize vision extractor.
 
         Args:
-            gemini_client: Optional GeminiPoolClient. If None, creates new client from settings.
+            ai_client: Optional AI client. If None, creates new client from settings.
         """
-        if gemini_client:
-            self.client = gemini_client
+        if ai_client:
+            self.client = ai_client
         else:
-            # Initialize GeminiPoolClient with all API keys
-            api_keys = settings.gemini_keys_list
-            if not api_keys:
-                raise ValueError("No Gemini API keys configured")
-
-            logger.info(f"Initializing GeminiPoolClient with {len(api_keys)} API keys")
-
-            self.client = GeminiPoolClient(
-                api_keys=api_keys,
-                model_text=settings.gemini_model_text,
-                model_vision=settings.gemini_model_vision,
-                timeout_s=60,
-                max_retries=3,
-                offline=settings.env in ("test", "ci"),
-                qps_per_key=settings.gemini_qps_per_key,
-                burst_multiplier=settings.gemini_burst_multiplier,
-                strategy=settings.gemini_strategy,
-            )
+            # Initialize AI client (auto-selects provider based on settings)
+            logger.info(f"Initializing AI client with provider: {settings.ai_provider}")
+            self.client = create_ai_client()
 
     async def extract_metrics_from_image(
         self,
@@ -284,9 +269,9 @@ class VisionMetricExtractor:
             timeout=60,
         )
 
-        # Parse response
+        # Parse response (handles both Gemini and OpenRouter formats)
         try:
-            text = response["candidates"][0]["content"]["parts"][0]["text"]
+            text = extract_text_from_response(response)
             data = json.loads(text)
             metrics = data.get("metrics", [])
 
@@ -296,8 +281,8 @@ class VisionMetricExtractor:
 
             return metrics
 
-        except (KeyError, json.JSONDecodeError, IndexError) as e:
-            logger.error(f"Failed to parse Gemini response: {e}")
+        except (KeyError, json.JSONDecodeError, IndexError, ValueError) as e:
+            logger.error(f"Failed to parse AI response: {e}")
             return []
 
     def _extract_and_filter_values(

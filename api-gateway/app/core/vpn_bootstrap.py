@@ -14,7 +14,6 @@ class VpnBootstrapError(RuntimeError):
     """Raised when VPN bootstrap fails."""
 
 
-# Legacy alias for backward compatibility
 WireGuardBootstrapError = VpnBootstrapError
 
 

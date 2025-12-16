@@ -1,7 +1,7 @@
 """
 Celery tasks for AI-generated recommendations.
 
-Implements async generation of recommendations using Gemini Text API
+Implements async generation of recommendations using AI Text API
 with pool client for API key rotation.
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload, sessionmaker
 
 from app.core.celery_app import celery_app
 from app.core.config import Settings
-from app.core.gemini_factory import create_gemini_client
+from app.core.ai_factory import create_ai_client
 from app.db.models import ScoringResult
 from app.services.recommendations import generate_recommendations
 
@@ -88,7 +88,7 @@ def generate_report_recommendations(
     This task:
     1. Loads the scoring result from database
     2. Collects metrics and context
-    3. Calls Gemini Text API via pool client
+    3. Calls AI Text API via pool client
     4. Updates scoring_result.recommendations field
     5. Handles retries on 429/503 errors
 
@@ -226,20 +226,20 @@ def generate_report_recommendations(
                         "reason": "No metrics found for recommendations",
                     }
 
-                # 6. Create Gemini pool client
+                # 6. Create AI pool client
                 try:
-                    gemini_client = create_gemini_client()
+                    ai_client = create_ai_client()
                 except ValueError as e:
                     logger.error(
                         "task_recommendations_no_client",
                         extra={"error": str(e)},
                     )
                     scoring_result.recommendations_status = "error"
-                    scoring_result.recommendations_error = f"Failed to create Gemini client: {e}"
+                    scoring_result.recommendations_error = f"Failed to create AI client: {e}"
                     await session.commit()
                     return {
                         "status": "failed",
-                        "reason": f"Failed to create Gemini client: {e}",
+                        "reason": f"Failed to create AI client: {e}",
                     }
 
                 logger.info(
@@ -253,7 +253,7 @@ def generate_report_recommendations(
                 # 7. Generate recommendations
                 try:
                     recommendations_data = await generate_recommendations(
-                        gemini_client=gemini_client,
+                        ai_client=ai_client,
                         metrics=metrics_for_recommendations,
                         score_pct=float(scoring_result.score_pct),
                         prof_activity_code=prof_activity.code,
@@ -266,11 +266,11 @@ def generate_report_recommendations(
                             extra={"scoring_result_id": scoring_result_id},
                         )
                         scoring_result.recommendations_status = "error"
-                        scoring_result.recommendations_error = "Gemini returned empty recommendations"
+                        scoring_result.recommendations_error = "AI returned empty recommendations"
                         await session.commit()
                         return {
                             "status": "failed",
-                            "reason": "Gemini returned empty recommendations",
+                            "reason": "AI returned empty recommendations",
                         }
 
                     # 8. Update scoring result with recommendations
@@ -332,8 +332,8 @@ def generate_report_recommendations(
 
                 finally:
                     # Close client resources
-                    if hasattr(gemini_client, "close"):
-                        await gemini_client.close()
+                    if hasattr(ai_client, "close"):
+                        await ai_client.close()
 
             finally:
                 # Close database connection

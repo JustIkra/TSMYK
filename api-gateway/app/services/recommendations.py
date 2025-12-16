@@ -14,8 +14,8 @@ from typing import Any, Union
 
 from pydantic import ValidationError
 
-from app.clients import GeminiClient, GeminiPoolClient
-from app.clients.exceptions import GeminiClientError
+from app.clients.exceptions import GeminiClientError, OpenRouterClientError
+from app.core.ai_factory import AIClient, extract_text_from_response
 from app.core.config import settings
 from app.schemas.recommendations import (
     RecommendationsInput,
@@ -114,14 +114,14 @@ class RecommendationsGenerator:
         },
     }
 
-    def __init__(self, gemini_client: Union[GeminiClient, GeminiPoolClient]):
+    def __init__(self, ai_client: AIClient):
         """
         Initialize recommendations generator.
 
         Args:
-            gemini_client: Configured Gemini API client (single or pool)
+            ai_client: Configured AI client (Gemini or OpenRouter, single or pool)
         """
-        self.client = gemini_client
+        self.client = ai_client
 
     def _build_prompt(self, input_data: RecommendationsInput) -> str:
         """
@@ -255,7 +255,7 @@ class RecommendationsGenerator:
 
         Raises:
             ValueError: If recommendations generation is disabled
-            GeminiClientError: If API call fails after retries
+            GeminiClientError or OpenRouterClientError: If API call fails after retries
             ValidationError: If response cannot be validated after self-heal attempts
         """
         # Check if recommendations are enabled
@@ -303,8 +303,8 @@ class RecommendationsGenerator:
                     response_mime_type="application/json",
                 )
 
-                # Extract text from response
-                raw_text = self._extract_text_from_response(response)
+                # Extract text from response (handles both Gemini and OpenRouter)
+                raw_text = extract_text_from_response(response)
 
                 # Parse JSON
                 try:
@@ -361,7 +361,7 @@ class RecommendationsGenerator:
                     prompt = self._build_self_heal_prompt(raw_text)
                     continue
 
-            except GeminiClientError as e:
+            except (GeminiClientError, OpenRouterClientError) as e:
                 logger.error(
                     "recommendations_api_error",
                     extra={
@@ -387,39 +387,6 @@ class RecommendationsGenerator:
             f"Last error: {last_error}"
         )
 
-    def _extract_text_from_response(self, response: dict[str, Any]) -> str:
-        """
-        Extract text content from Gemini API response.
-
-        Args:
-            response: Raw API response
-
-        Returns:
-            Text content
-
-        Raises:
-            ValueError: If response format is unexpected
-        """
-        try:
-            candidates = response.get("candidates", [])
-            if not candidates:
-                raise ValueError("No candidates in response")
-
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-
-            if not parts:
-                raise ValueError("No parts in content")
-
-            text = parts[0].get("text", "")
-
-            if not text:
-                raise ValueError("Empty text in response")
-
-            return text
-
-        except (KeyError, IndexError, TypeError) as e:
-            raise ValueError(f"Unexpected response format: {e}") from e
 
     def _build_self_heal_prompt(self, invalid_json: str) -> str:
         """
@@ -464,7 +431,7 @@ class RecommendationsGenerator:
 
 
 async def generate_recommendations(
-    gemini_client: Union[GeminiClient, GeminiPoolClient],
+    ai_client: AIClient,
     metrics: list[dict],
     score_pct: float,
     prof_activity_code: str,
@@ -474,7 +441,7 @@ async def generate_recommendations(
     Convenience function to generate recommendations.
 
     Args:
-        gemini_client: Configured Gemini API client
+        ai_client: Configured AI client (Gemini or OpenRouter)
         metrics: List of metrics with code, name, value, weight
         score_pct: Overall score percentage (0-100)
         prof_activity_code: Professional activity code
@@ -486,13 +453,13 @@ async def generate_recommendations(
 
     Raises:
         ValueError: If API keys are not configured or response is invalid
-        GeminiClientError: If Gemini API call fails after retries
+        GeminiClientError or OpenRouterClientError: If API call fails after retries
     """
     if not settings.ai_recommendations_enabled:
         logger.info("recommendations_disabled")
         return None
 
-    generator = RecommendationsGenerator(gemini_client)
+    generator = RecommendationsGenerator(ai_client)
     response = await generator.generate(
         metrics=metrics,
         score_pct=score_pct,

@@ -9,10 +9,9 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import and_, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ParticipantMetric, Report
+from app.db.models import ParticipantMetric
 
 
 class ParticipantMetricRepository:
@@ -30,11 +29,10 @@ class ParticipantMetricRepository:
         source_report_id: UUID,
     ) -> ParticipantMetric:
         """
-        Upsert a participant metric with priority rules.
+        Upsert a participant metric - always update with new value.
 
-        Priority rules:
-        1. More recent report.uploaded_at takes precedence
-        2. On tie, higher confidence value is preferred
+        When re-extracting metrics, we always want to update the participant's
+        metric with the latest extracted value, regardless of report upload date.
 
         Args:
             participant_id: UUID of the participant
@@ -46,50 +44,18 @@ class ParticipantMetricRepository:
         Returns:
             Created or updated ParticipantMetric instance
         """
-        # Get the report timestamp for priority comparison
-        report_result = await self.db.execute(
-            select(Report.uploaded_at).where(Report.id == source_report_id)
-        )
-        report_uploaded_at = report_result.scalar_one()
-
         # Check if metric already exists
         existing = await self.get_by_participant_and_code(participant_id, metric_code)
 
         if existing:
-            # Get the existing report timestamp
-            existing_report_result = await self.db.execute(
-                select(Report.uploaded_at).where(Report.id == existing.last_source_report_id)
-            )
-            existing_uploaded_at = existing_report_result.scalar_one_or_none()
-
-            # Determine if we should update based on priority rules
-            should_update = False
-
-            if existing_uploaded_at is None:
-                # No existing report timestamp, always update
-                should_update = True
-            elif report_uploaded_at > existing_uploaded_at:
-                # New report is more recent
-                should_update = True
-            elif report_uploaded_at == existing_uploaded_at:
-                # Same timestamp, check confidence
-                existing_confidence = existing.confidence or Decimal("0")
-                new_confidence = confidence or Decimal("0")
-                if new_confidence >= existing_confidence:
-                    should_update = True
-
-            if should_update:
-                # Update existing record
-                existing.value = value
-                existing.confidence = confidence
-                existing.last_source_report_id = source_report_id
-                existing.updated_at = datetime.utcnow()
-                await self.db.commit()
-                await self.db.refresh(existing)
-                return existing
-            else:
-                # Keep existing record, don't update
-                return existing
+            # Always update existing record with new value
+            existing.value = value
+            existing.confidence = confidence
+            existing.last_source_report_id = source_report_id
+            existing.updated_at = datetime.utcnow()
+            await self.db.commit()
+            await self.db.refresh(existing)
+            return existing
         else:
             # Insert new record
             new_metric = ParticipantMetric(
