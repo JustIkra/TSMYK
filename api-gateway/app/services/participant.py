@@ -117,10 +117,8 @@ class ParticipantService:
             size=params.size,
         )
 
-        # Convert to response DTOs
         items = [ParticipantResponse.model_validate(p) for p in participants]
 
-        # Calculate total pages
         pages = ceil(total / params.size) if total > 0 else 0
 
         return ParticipantListResponse(

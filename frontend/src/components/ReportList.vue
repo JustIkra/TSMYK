@@ -308,7 +308,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Sort,
@@ -323,7 +323,9 @@ import {
   Delete,
   ArrowDown
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { formatDate } from '@/utils/dateFormat'
+import { useResponsive } from '@/composables/useResponsive'
 
 const props = defineProps({
   reports: {
@@ -350,13 +352,9 @@ const route = useRoute()
 const router = useRouter()
 
 // Responsive
-const isMobile = ref(window.innerWidth <= 768)
-const updateMobile = () => {
-  isMobile.value = window.innerWidth <= 768
-}
+const { isMobile } = useResponsive()
 
 onMounted(() => {
-  window.addEventListener('resize', updateMobile)
   // Load filters from URL
   if (route.query.status) {
     filterStatus.value = route.query.status
@@ -364,10 +362,6 @@ onMounted(() => {
   if (route.query.sort) {
     sortOrder.value = route.query.sort
   }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateMobile)
 })
 
 // Filters and Sort
@@ -430,20 +424,6 @@ const emptyText = computed(() => {
   }
   return 'Нет загруженных отчётов'
 })
-
-// Format helpers
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—'
-  const parsedDate = new Date(dateStr)
-  if (Number.isNaN(parsedDate.getTime())) return '—'
-  return parsedDate.toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
 
 const formatStatus = (status) => {
   const statuses = {

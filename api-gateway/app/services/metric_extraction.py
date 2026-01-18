@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.db.models import Report, ReportImage
 from app.repositories.metric import ExtractedMetricRepository, MetricDefRepository
 from app.repositories.participant_metric import ParticipantMetricRepository
+from app.services.image_utils import ensure_white_background, preprocess_image
 from app.services.metric_mapping import get_metric_mapping_service
 from app.services.vision_prompts import IMPROVED_VISION_PROMPT
 
@@ -76,7 +77,6 @@ class MetricExtractionService:
         self.participant_metric_repo = ParticipantMetricRepository(db)
         self.mapping_service = get_metric_mapping_service()
 
-        # Initialize AI client (auto-selects provider based on settings)
         logger.info(f"Initializing AI client with provider: {settings.ai_provider}")
 
         self.ai_client = create_ai_client()
@@ -117,7 +117,6 @@ class MetricExtractionService:
         all_metrics: list[ExtractedMetricData] = []
         errors = []
 
-        # Get report for participant_id
         result = await self.db.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
@@ -139,7 +138,6 @@ class MetricExtractionService:
             f"will combine into 1-2 requests"
         )
 
-        # Handle edge cases
         if not images:
             logger.warning("No images provided for extraction")
             return {
@@ -349,7 +347,7 @@ class MetricExtractionService:
 
             except Exception as e:
                 # Distinguish critical (DB-related) vs. non-critical errors
-                is_critical = isinstance(e, (DBAPIError, IntegrityError, OperationalError))
+                is_critical = isinstance(e, DBAPIError | IntegrityError | OperationalError)
 
                 logger.error(
                     f"Failed to save metric {metric.normalized_label}: {e} "
@@ -494,15 +492,12 @@ class MetricExtractionService:
             img.save(output, format="PNG")
             return output.getvalue()
 
-        # Calculate dimensions
         max_width = max(img.width for img in images)
         total_height = sum(img.height for img in images)
         total_height += self.image_padding * (len(images) - 1)
 
-        # Create combined image with white background
         combined = Image.new("RGB", (max_width, total_height), (255, 255, 255))
 
-        # Paste images vertically with padding
         y_offset = 0
         for img in images:
             # Ensure white background for transparent images
@@ -537,23 +532,7 @@ class MetricExtractionService:
         Returns:
             RGB image with white background
         """
-        if img.mode == "P":
-            if "transparency" in img.info:
-                img = img.convert("RGBA")
-            else:
-                return img.convert("RGB")
-
-        if img.mode in ("RGBA", "LA"):
-            # Create white background
-            white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
-            if img.mode == "LA":
-                # Convert LA to RGBA
-                rgba_img = img.convert("RGBA")
-                img = rgba_img
-            # Composite on white background
-            return Image.alpha_composite(white_bg, img).convert("RGB")
-
-        return img.convert("RGB") if img.mode != "RGB" else img
+        return ensure_white_background(img)
 
     async def _load_image_data(self, img: ReportImage) -> bytes:
         """Load image data from storage."""
@@ -578,49 +557,7 @@ class MetricExtractionService:
         Returns:
             Processed image bytes (PNG)
         """
-        with Image.open(io.BytesIO(image_data)) as img:
-            # Handle transparent background: convert to white
-            if img.mode in ("RGBA", "LA", "P"):
-                # Handle palette mode with transparency
-                if img.mode == "P":
-                    # Check if has transparency
-                    if "transparency" in img.info:
-                        # Convert to RGBA first
-                        img = img.convert("RGBA")
-                    else:
-                        # No transparency, just convert to RGB
-                        img = img.convert("RGB")
-
-                # If still has alpha channel, composite on white background
-                if img.mode in ("RGBA", "LA"):
-                    # Create white background in RGBA mode
-                    white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
-
-                    # Convert image to RGBA if needed
-                    if img.mode == "LA":
-                        # LA (grayscale with alpha) -> RGBA
-                        rgba_img = Image.new("RGBA", img.size)
-                        rgba_img.paste(img.convert("L"), (0, 0))
-                        # Copy alpha channel
-                        alpha = img.split()[1]
-                        rgba_img.putalpha(alpha)
-                        img = rgba_img
-                    elif img.mode != "RGBA":
-                        img = img.convert("RGBA")
-
-                    # Composite image on white background
-                    img = Image.alpha_composite(white_bg, img).convert("RGB")
-                else:
-                    # Already RGB
-                    img = img.convert("RGB")
-            elif img.mode not in ("RGB", "L"):
-                # Convert other modes to RGB
-                img = img.convert("RGB")
-
-            # Save to PNG
-            output = io.BytesIO()
-            img.save(output, format="PNG")
-            return output.getvalue()
+        return preprocess_image(image_data)
 
     async def _extract_metrics_with_retry(
         self,
@@ -724,11 +661,9 @@ class MetricExtractionService:
         if not label or not value:
             raise ValueError(f"Empty label or value: {metric}")
 
-        # Validate value format
         if not VALUE_PATTERN.match(value):
             raise ValueError(f"Invalid value format: {value}")
 
-        # Normalize label (uppercase)
         normalized_label = label.upper()
 
         # Parse value (replace comma with dot)
@@ -738,7 +673,6 @@ class MetricExtractionService:
         except Exception as e:
             raise ValueError(f"Failed to parse value '{value}': {e}") from e
 
-        # Validate range [1, 10]
         if not (Decimal("1") <= decimal_value <= Decimal("10")):
             raise ValueError(f"Value out of range [1, 10]: {decimal_value}")
 

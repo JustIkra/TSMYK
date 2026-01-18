@@ -83,7 +83,6 @@ const isFocused = ref(false)
 const hasError = ref(false)
 const errorMessage = ref('')
 
-// Computed
 const numericValue = computed(() => {
   return parseNumber(displayValue.value)
 })
@@ -98,7 +97,6 @@ const isMaxDisabled = computed(() => {
   return val === null || val >= props.max
 })
 
-// Methods
 const updateDisplayValue = (value) => {
   if (value === null || value === undefined || value === '') {
     displayValue.value = ''
@@ -239,7 +237,6 @@ watch(() => props.modelValue, (newValue) => {
   updateDisplayValue(newValue)
 }, { immediate: true })
 
-// Инициализация
 updateDisplayValue(props.modelValue)
 </script>
 

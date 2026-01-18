@@ -136,10 +136,8 @@ class ParticipantRepository:
         Returns:
             Tuple of (list of participants, total count)
         """
-        # Build base query
         stmt = select(Participant)
 
-        # Apply filters
         filters = []
 
         # Prepare normalized full_name expression once to reuse across filters.
@@ -159,19 +157,15 @@ class ParticipantRepository:
         if filters:
             stmt = stmt.where(or_(*filters) if len(filters) > 1 else filters[0])
 
-        # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total_result = await self.db.execute(count_stmt)
         total = total_result.scalar_one()
 
-        # Apply deterministic sorting: full_name ASC, id ASC
         stmt = stmt.order_by(Participant.full_name, Participant.id)
 
-        # Apply pagination
         offset = (page - 1) * size
         stmt = stmt.offset(offset).limit(size)
 
-        # Execute query
         result = await self.db.execute(stmt)
         participants = list(result.scalars().all())
 

@@ -108,6 +108,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { participantsApi, metricsApi } from '@/api'
 import { formatFromApi } from '@/utils/numberFormat'
 import { getMetricDisplayName } from '@/utils/metricNames'
+import { formatDate } from '@/utils/dateFormat'
 
 const props = defineProps({
   modelValue: {
@@ -177,19 +178,6 @@ const getConfidenceColor = (confidence) => {
   if (confidence >= 0.8) return 'var(--el-color-success)'
   if (confidence >= 0.6) return 'var(--el-color-warning)'
   return 'var(--el-color-danger)'
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—'
-  const parsedDate = new Date(dateStr)
-  if (Number.isNaN(parsedDate.getTime())) return '—'
-  return parsedDate.toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 // Watch for participantId changes

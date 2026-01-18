@@ -53,7 +53,6 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       const data = await adminApi.approveUser(userId)
       pendingUsers.value = pendingUsers.value.filter(u => u.id !== userId)
-      // Обновим пользователя в общем списке, если он уже загружен
       users.value = users.value.map((u) => (u.id === userId ? data : u))
       return data
     } catch (err) {

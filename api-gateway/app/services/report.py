@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.models import FileRef, Report
+from app.repositories.metric import ExtractedMetricRepository
 from app.repositories.report import ReportRepository
 from app.repositories.report_image import ReportImageRepository
-from app.repositories.metric import ExtractedMetricRepository
 from app.schemas.report import ReportResponse, ReportUploadResponse
 from app.services.storage import FileTooLargeError, LocalReportStorage, StorageError
 
@@ -68,7 +68,6 @@ class ReportService:
         report_id = uuid.uuid4()
         file_ref_id = uuid.uuid4()
 
-        # Build storage key prior to saving the file
         key = self.storage.report_key(str(participant_id), str(report_id))
 
         mime = (
@@ -221,10 +220,8 @@ class ReportService:
         """
         import base64
 
-        # Verify report exists
-        report = await self.get_report_by_id(report_id)
+        await self.get_report_by_id(report_id)
 
-        # Get all images for this report
         image_repo = ReportImageRepository(self.db)
         images = await image_repo.get_by_report(report_id)
 

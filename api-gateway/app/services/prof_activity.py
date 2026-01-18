@@ -49,7 +49,6 @@ class ProfActivityService:
         Raises:
             ValueError: If code already exists
         """
-        # Check if code already exists
         existing = await self.repo.get_by_code(request.code)
         if existing:
             raise ValueError(f"Professional activity with code '{request.code}' already exists")

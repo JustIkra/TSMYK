@@ -48,7 +48,6 @@ class WeightTableService:
             for item in payload.weights
         ]
 
-        # Check if weight table already exists for this activity
         existing_table = await self.weight_repo.get_by_activity(prof_activity.id)
 
         if existing_table:

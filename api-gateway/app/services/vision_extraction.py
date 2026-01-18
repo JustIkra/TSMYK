@@ -12,17 +12,14 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
-
-from PIL import Image
 
 from app.core.ai_factory import create_ai_client, extract_text_from_response
 from app.core.config import settings
+from app.services.image_utils import preprocess_image
 from app.services.vision_prompts import IMPROVED_VISION_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -163,49 +160,7 @@ class VisionMetricExtractor:
         Returns:
             Processed image bytes (PNG)
         """
-        with Image.open(io.BytesIO(image_data)) as img:
-            # Handle transparent background: convert to white
-            if img.mode in ("RGBA", "LA", "P"):
-                # Handle palette mode with transparency
-                if img.mode == "P":
-                    # Check if has transparency
-                    if "transparency" in img.info:
-                        # Convert to RGBA first
-                        img = img.convert("RGBA")
-                    else:
-                        # No transparency, just convert to RGB
-                        img = img.convert("RGB")
-
-                # If still has alpha channel, composite on white background
-                if img.mode in ("RGBA", "LA"):
-                    # Create white background in RGBA mode
-                    white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
-
-                    # Convert image to RGBA if needed
-                    if img.mode == "LA":
-                        # LA (grayscale with alpha) -> RGBA
-                        rgba_img = Image.new("RGBA", img.size)
-                        rgba_img.paste(img.convert("L"), (0, 0))
-                        # Copy alpha channel
-                        alpha = img.split()[1]
-                        rgba_img.putalpha(alpha)
-                        img = rgba_img
-                    elif img.mode != "RGBA":
-                        img = img.convert("RGBA")
-
-                    # Composite image on white background
-                    img = Image.alpha_composite(white_bg, img).convert("RGB")
-                else:
-                    # Already RGB
-                    img = img.convert("RGB")
-            elif img.mode not in ("RGB", "L"):
-                # Convert other modes to RGB
-                img = img.convert("RGB")
-
-            # Save to PNG
-            output = io.BytesIO()
-            img.save(output, format="PNG")
-            return output.getvalue()
+        return preprocess_image(image_data)
 
     async def _extract_metrics_with_retry(
         self,

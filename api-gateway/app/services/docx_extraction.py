@@ -90,7 +90,6 @@ class DocxImageExtractor:
             if name.startswith(self.MEDIA_PREFIX) and not name.endswith("/")
         ]
 
-        # Sort to ensure deterministic ordering
         media_files.sort()
 
         logger.debug(f"Found {len(media_files)} media files in DOCX archive")
@@ -173,7 +172,6 @@ class DocxImageExtractor:
                 elif img.mode != "RGB":
                     img = img.convert("RGB")
 
-                # Save to PNG
                 output = io.BytesIO()
                 img.save(output, format="PNG")
                 return output.getvalue()

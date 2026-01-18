@@ -122,5 +122,4 @@ class LocalReportStorage:
         try:
             path.unlink(missing_ok=True)
         except OSError:
-            # Log warning in future when logging subsystem is ready
             pass

@@ -246,21 +246,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import AppLayout from '@/components/AppLayout.vue'
 import { useParticipantsStore } from '@/stores'
+import { useResponsive } from '@/composables/useResponsive'
 
 const router = useRouter()
 const participantsStore = useParticipantsStore()
 
 // Responsive
-const isMobile = ref(window.innerWidth <= 768)
-const updateMobile = () => {
-  isMobile.value = window.innerWidth <= 768
-}
+const { isMobile } = useResponsive()
 
 const searchForm = reactive({
   query: '',
@@ -337,12 +335,7 @@ const confirmDelete = (participant) => {
 }
 
 onMounted(() => {
-  window.addEventListener('resize', updateMobile)
   handleSearch()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateMobile)
 })
 </script>
 

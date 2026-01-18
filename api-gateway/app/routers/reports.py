@@ -11,7 +11,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    Form,
     HTTPException,
     Request,
     Response,
@@ -21,9 +20,11 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.dependencies import get_current_active_user
 from app.db.models import User
 from app.db.session import get_db
+from app.repositories.report_image import ReportImageRepository
 from app.schemas.report import (
     ReportImageResponse,
     ReportListResponse,
@@ -32,9 +33,7 @@ from app.schemas.report import (
 )
 from app.services.report import ReportService
 from app.services.storage import LocalReportStorage
-from app.repositories.report_image import ReportImageRepository
 from app.tasks.extraction import extract_images_from_report
-from app.core.config import settings
 
 router = APIRouter(tags=["reports"])
 
@@ -184,7 +183,7 @@ async def get_report_images(
     """
     # Verify report exists
     report_service = ReportService(db)
-    report = await report_service.get_report_by_id(report_id)
+    await report_service.get_report_by_id(report_id)
 
     # Get all images for the report
     image_repo = ReportImageRepository(db)

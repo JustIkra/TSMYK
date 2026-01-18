@@ -95,8 +95,18 @@
             inactive-text="Только заполненные"
           />
           <div class="metrics-stats">
-            <el-tag type="success" size="small">Заполнено: {{ filledCount }}</el-tag>
-            <el-tag type="info" size="small">Не заполнено: {{ missingCount }}</el-tag>
+            <el-tag
+              type="success"
+              size="small"
+            >
+              Заполнено: {{ filledCount }}
+            </el-tag>
+            <el-tag
+              type="info"
+              size="small"
+            >
+              Не заполнено: {{ missingCount }}
+            </el-tag>
             <span class="metrics-count">
               Показано: {{ filteredMetrics.length }} из {{ availableMetrics.length }}
             </span>
@@ -299,6 +309,7 @@ import MetricInput from './MetricInput.vue'
 import { metricsApi, reportsApi } from '@/api'
 import { parseNumber, formatForApi } from '@/utils/numberFormat'
 import { formatMetricLabel } from '@/utils/metricNames'
+import { formatDateLong } from '@/utils/dateFormat'
 
 const props = defineProps({
   reportId: {
@@ -592,15 +603,8 @@ const getSourceLabel = (source) => {
   }
 }
 
-const formatDate = (date) => {
-  return new Date(date).toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+// Используем formatDateLong для развернутого формата даты
+const formatDate = formatDateLong
 
 // Images methods
 const loadReportImages = async () => {

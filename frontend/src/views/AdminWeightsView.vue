@@ -537,6 +537,7 @@ import { weightsApi } from '@/api/weights'
 import { profActivitiesApi } from '@/api/profActivities'
 import { metricsApi } from '@/api/metrics'
 import { getMetricDisplayName } from '@/utils/metricNames'
+import { formatDateShort } from '@/utils/dateFormat'
 
 // Состояние
 const loading = ref(false)
@@ -689,17 +690,6 @@ const loadMetrics = async () => {
   }
 }
 
-const showCreateDialog = () => {
-  editingTable.value = null
-  tableForm.value = {
-    prof_activity_code: '',
-    weights: [],
-    metadata: {
-      description: ''
-    }
-  }
-  tableDialogVisible.value = true
-}
 
 const editTable = (table) => {
   editingTable.value = table
@@ -884,9 +874,8 @@ const enrichedWeights = (weights) => {
   })
 }
 
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleString('ru-RU')
-}
+// Используем formatDateShort для краткого формата даты
+const formatDate = formatDateShort
 
 // Загрузка всех данных
 const loadData = async () => {

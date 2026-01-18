@@ -150,7 +150,7 @@ class KeyPool:
 
         # Calculate burst size
         burst_size = qps_per_key * burst_multiplier
-        
+
         # Ensure burst_size is at least 1.0 (we always request 1.0 token per request)
         # This prevents errors when burst_size < 1.0 due to rounding issues
         if burst_size < 1.0:
@@ -506,7 +506,7 @@ class KeyPool:
 
             # Per-key stats
             rl_stats = key_metrics.rate_limiter.get_stats()
-            cb_stats = key_metrics.circuit_breaker.get_stats()
+            key_metrics.circuit_breaker.get_stats()
 
             per_key_stats.append(
                 {

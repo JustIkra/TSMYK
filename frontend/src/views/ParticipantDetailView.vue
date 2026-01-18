@@ -461,6 +461,8 @@ import ParticipantMetricsDrawer from '@/components/ParticipantMetricsDrawer.vue'
 import { useParticipantsStore } from '@/stores'
 import { reportsApi, profActivitiesApi, scoringApi, participantsApi, metricsApi } from '@/api'
 import { formatFromApi } from '@/utils/numberFormat'
+import { formatDate } from '@/utils/dateFormat'
+import { useResponsive } from '@/composables/useResponsive'
 
 const router = useRouter()
 const route = useRoute()
@@ -470,10 +472,7 @@ const loading = ref(false)
 const loadingReports = ref(false)
 
 // Mobile responsiveness
-const isMobile = ref(window.innerWidth <= 768)
-const updateMobile = () => {
-  isMobile.value = window.innerWidth <= 768
-}
+const { isMobile } = useResponsive()
 const loadingActivities = ref(false)
 const uploading = ref(false)
 const calculating = ref(false)
@@ -521,20 +520,6 @@ const scoringForm = reactive({
   activityCode: ''
 })
 
-// Format helpers
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—'
-  const parsedDate = new Date(dateStr)
-  if (Number.isNaN(parsedDate.getTime())) return '—'
-  return parsedDate.toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 const getScoreStatus = (score) => {
   if (score >= 80) return 'success'
   if (score >= 60) return ''
@@ -561,7 +546,6 @@ const getRecommendationStatusType = (status) => {
   return types[status] || 'info'
 }
 
-// Load data
 const loadParticipant = async () => {
   loading.value = true
   try {
@@ -766,7 +750,6 @@ const resetBatchUpload = () => {
   }
 }
 
-// Report actions
 const downloadReport = async (reportId) => {
   try {
     const response = await reportsApi.download(reportId)
@@ -873,7 +856,6 @@ const handleDeleteReport = async (reportId) => {
   }
 }
 
-// Scoring
 const calculateScoring = async () => {
   if (!scoringForm.activityCode) {
     ElMessage.warning('Выберите профессиональную область')
@@ -966,7 +948,6 @@ const getRecommendationErrorTitle = (result) => {
 }
 
 onMounted(async () => {
-  window.addEventListener('resize', updateMobile)
   await loadParticipant()
   await loadReports()
   await loadScoringResults()
@@ -975,7 +956,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', updateMobile)
   stopAutoRefresh()
   stopRecommendationsRefresh()
 })
