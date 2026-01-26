@@ -617,8 +617,16 @@ class MetricGenerationService:
         return code
 
     async def get_or_create_category(self, category_name: str) -> MetricCategory:
-        """Get existing category or create new one."""
-        # Try to find existing
+        """
+        Get existing category or create new one.
+
+        Uses savepoint pattern to handle concurrent creation attempts gracefully.
+        If IntegrityError occurs (duplicate code), rolls back to savepoint and
+        returns the existing category.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        # Try to find existing (case-insensitive partial match)
         result = await self.db.execute(
             select(MetricCategory).where(
                 MetricCategory.name.ilike(f"%{category_name}%")
@@ -628,7 +636,7 @@ class MetricGenerationService:
         if existing:
             return existing
 
-        # Create new category
+        # Create new category with savepoint protection
         code = self._generate_metric_code(category_name)[:50]
 
         # Get max sort_order
@@ -642,10 +650,28 @@ class MetricGenerationService:
             name=category_name,
             sort_order=max_order + 1,
         )
-        self.db.add(category)
-        await self.db.flush()
 
-        return category
+        try:
+            # Use savepoint so IntegrityError doesn't abort outer transaction
+            async with self.db.begin_nested():
+                self.db.add(category)
+                await self.db.flush()
+            return category
+        except IntegrityError:
+            # Another request created the same category concurrently
+            # Rollback handled by begin_nested context manager
+            logger.info(f"Category '{category_name}' created concurrently, fetching existing")
+            await self.db.rollback()  # Ensure clean state
+            result = await self.db.execute(
+                select(MetricCategory).where(
+                    MetricCategory.name.ilike(f"%{category_name}%")
+                )
+            )
+            existing = result.scalars().first()
+            if existing:
+                return existing
+            # If still not found, re-raise (shouldn't happen)
+            raise
 
     async def create_pending_metric(
         self,
