@@ -906,13 +906,23 @@ async def test_get_final_report_participant_not_found(user_client: AsyncClient):
 async def test_get_final_report_no_weight_table(
     user_client: AsyncClient,
     sample_participant: Participant,
+    db_session: AsyncSession,
 ):
     """Test final report when no weight table exists for the activity.
 
-    Note: The API validates weight table existence before checking for scoring results.
+    Creates a ProfActivity without a WeightTable to trigger the weight table validation error.
     """
+    # Create activity without weight table
+    activity = ProfActivity(
+        id=uuid.uuid4(),
+        code="developer_no_weights",
+        name="Developer (No Weights)",
+    )
+    db_session.add(activity)
+    await db_session.commit()
+
     response = await user_client.get(
-        f"/api/participants/{sample_participant.id}/final-report?activity_code=developer"
+        f"/api/participants/{sample_participant.id}/final-report?activity_code=developer_no_weights"
     )
 
     assert response.status_code == 400
