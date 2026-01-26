@@ -1,0 +1,22 @@
+# Development override - auto-applied with: docker compose up -d
+# For production without volumes: docker compose -f docker-compose.yml up -d
+#
+# Hot-reload controlled by ENV in .env:
+#   ENV=dev  -> uvicorn --reload enabled (main.py:260)
+#   ENV=prod -> no reload
+
+services:
+  app:
+    volumes:
+      # Mount source code for instant changes (no rebuild needed)
+      - ./api-gateway/app:/app/app:ro
+      - ./api-gateway/main.py:/app/main.py:ro
+      - ./api-gateway/alembic:/app/alembic:ro
+      - ./config:/app/config:ro
+
+  worker:
+    volumes:
+      # Mount source code (restart worker after changes: docker compose restart worker)
+      - ./api-gateway/app:/app/app:ro
+      - ./api-gateway/main.py:/app/main.py:ro
+      - ./config:/app/config:ro

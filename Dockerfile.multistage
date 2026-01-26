@@ -1,40 +1,31 @@
+# syntax=docker/dockerfile:1.4
+
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
 COPY frontend/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline
 COPY frontend/ ./
-# Override outDir to build in current directory
 RUN npm run build -- --outDir=dist
 
-# Stage 2: Python runtime
-FROM python:3.11-slim AS runtime
-
-# Install system dependencies for WeasyPrint, OpenCV, and DOCX conversion
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf-2.0-0 \
-    libffi-dev \
-    libcairo2 \
-    libgirepository1.0-dev \
-    gir1.2-pango-1.0 \
-    libgl1 \
-    libglib2.0-0 \
-    # For DOCX to PDF conversion
-    pandoc \
-    texlive-latex-base \
-    texlive-fonts-recommended \
-    texlive-latex-extra \
-    lmodern \
-    && rm -rf /var/lib/apt/lists/*
+# Stage 2: Python runtime (uses pre-built base with system deps)
+# If tsmuk-base:latest doesn't exist, falls back to building deps inline
+FROM tsmuk-base:latest AS runtime
 
 WORKDIR /app
 
-# Copy application code and install dependencies from pyproject.toml
+# Copy only dependency files and minimal package structure (for better caching)
+COPY api-gateway/pyproject.toml ./
+RUN mkdir -p app && touch app/__init__.py
+
+# Install Python dependencies with cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install .
+
+# Copy application code (changes here won't invalidate pip cache)
+# This overwrites the stub app/ with real code
 COPY api-gateway/ ./
-RUN pip install --no-cache-dir .[dev]
 
 # Copy built frontend to static directory
 COPY --from=frontend-builder /build/dist ./static/

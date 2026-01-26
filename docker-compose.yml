@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.multistage
+    image: tsmuk-app:${IMAGE_TAG:-latest}
     container_name: tsmuk-app
     env_file:
       - .env
@@ -39,6 +40,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.multistage
+    image: tsmuk-app:${IMAGE_TAG:-latest}
     container_name: tsmuk-worker
     env_file:
       - .env
@@ -52,6 +54,8 @@ services:
       ENV: ${ENV:-prod}
     command: ["/app/docker-entrypoint-worker.sh"]
     depends_on:
+      app:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -111,24 +115,6 @@ services:
       retries: 10
     restart: always
 
-  frontend-dev:
-    image: node:20-alpine
-    container_name: tsmuk-frontend-dev
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    ports:
-      - "5173:5173"
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
-    environment:
-      - VITE_API_TARGET=http://app:9187
-    depends_on:
-      - app
-    profiles:
-      - dev
-
 volumes:
   db-data:
   reports:
-  frontend_node_modules:
