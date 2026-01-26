@@ -173,3 +173,21 @@ class TestProcessDocumentTransaction:
         assert 'rollback' in source, (
             "process_document should have explicit rollback on errors"
         )
+
+
+@pytest.mark.asyncio
+class TestAddSynonymTransaction:
+    """Test transaction handling in _add_synonym_if_new."""
+
+    async def test_add_synonym_uses_savepoint(self, db_session: AsyncSession):
+        """
+        Test that _add_synonym_if_new uses savepoint for safe concurrent access.
+        """
+        import inspect
+        from app.services.metric_generation import MetricGenerationService
+
+        source = inspect.getsource(MetricGenerationService._add_synonym_if_new)
+
+        assert 'begin_nested' in source, (
+            "_add_synonym_if_new should use begin_nested() for savepoint pattern"
+        )

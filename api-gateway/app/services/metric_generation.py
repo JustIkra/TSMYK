@@ -905,6 +905,8 @@ class MetricGenerationService:
         """
         Add extracted name as synonym if not already exists.
 
+        Uses savepoint pattern to handle concurrent insertion gracefully.
+
         Args:
             metric_def_id: Metric to add synonym to
             synonym_text: Text to add as synonym
@@ -912,6 +914,8 @@ class MetricGenerationService:
         Returns:
             True if synonym was added, False if already exists
         """
+        from sqlalchemy.exc import IntegrityError
+
         # Normalize synonym
         synonym_normalized = synonym_text.strip()
         if not synonym_normalized:
@@ -926,20 +930,29 @@ class MetricGenerationService:
         if result.scalars().first():
             return False
 
-        # Add new synonym
+        # Add new synonym with savepoint protection
         new_synonym = MetricSynonym(
             metric_def_id=metric_def_id,
             synonym=synonym_normalized,
         )
-        self.db.add(new_synonym)
-        logger.info(
-            "synonym_added_from_extraction",
-            extra={
-                "metric_def_id": str(metric_def_id),
-                "synonym": synonym_normalized,
-            },
-        )
-        return True
+
+        try:
+            async with self.db.begin_nested():
+                self.db.add(new_synonym)
+                await self.db.flush()
+            logger.info(
+                "synonym_added_from_extraction",
+                extra={
+                    "metric_def_id": str(metric_def_id),
+                    "synonym": synonym_normalized,
+                },
+            )
+            return True
+        except IntegrityError:
+            # Synonym was created concurrently, that's fine
+            logger.debug(f"Synonym '{synonym_normalized}' already exists (concurrent insert)")
+            await self.db.rollback()
+            return False
 
     # ==================== Main Processing ====================
 
