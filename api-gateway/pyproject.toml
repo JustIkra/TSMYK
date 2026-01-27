@@ -36,7 +36,6 @@ dependencies = [
     "Pillow==11.0.0",
     # PDF Processing
     "PyMuPDF==1.25.1",
-    "pypandoc==1.14",
     # Template Engine
     "jinja2==3.1.5",
     # Utilities
