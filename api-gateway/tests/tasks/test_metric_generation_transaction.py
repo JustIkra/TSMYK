@@ -91,19 +91,19 @@ class TestGetOrCreateCategoryTransaction:
 
 @pytest.mark.asyncio
 class TestCreatePendingMetricTransaction:
-    """Test transaction handling in create_pending_metric."""
+    """Test transaction handling in get_or_create_pending_metric."""
 
-    async def test_create_pending_metric_uses_savepoint(self, db_session: AsyncSession):
+    async def test_get_or_create_pending_metric_uses_savepoint(self, db_session: AsyncSession):
         """
-        Test that create_pending_metric uses savepoint pattern.
+        Test that get_or_create_pending_metric uses savepoint pattern.
         """
         import inspect
         from app.services.metric_generation import MetricGenerationService
 
-        source = inspect.getsource(MetricGenerationService.create_pending_metric)
+        source = inspect.getsource(MetricGenerationService.get_or_create_pending_metric)
 
         assert 'begin_nested' in source, (
-            "create_pending_metric should use begin_nested() for savepoint pattern"
+            "get_or_create_pending_metric should use begin_nested() for savepoint pattern"
         )
 
     async def test_session_usable_after_metric_creation(self, db_session: AsyncSession):
@@ -126,7 +126,8 @@ class TestCreatePendingMetricTransaction:
             rationale=None,
         )
 
-        metric1 = await service.create_pending_metric(metric_data)
+        metric1, created = await service.get_or_create_pending_metric(metric_data)
+        assert created is True
         await db_session.commit()
 
         # Session should still be usable - query the metric directly

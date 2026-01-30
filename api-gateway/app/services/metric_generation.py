@@ -406,7 +406,12 @@ class MetricGenerationService:
         logger.info(f"PDF extraction AI response: {json.dumps(parsed, ensure_ascii=False, default=str)[:2000]}")
 
         if isinstance(parsed, list):
-            metrics_list = parsed
+            # Handle case where LLM returns [{"metrics": [...]}] instead of [{...}, {...}]
+            if len(parsed) == 1 and isinstance(parsed[0], dict) and "metrics" in parsed[0]:
+                metrics_list = parsed[0]["metrics"]
+                logger.debug("Unwrapped nested metrics array from [{'metrics': [...]}]")
+            else:
+                metrics_list = parsed
         elif isinstance(parsed, dict):
             metrics_list = parsed.get("metrics", [])
         else:
@@ -549,7 +554,10 @@ class MetricGenerationService:
     # ==================== Database Operations ====================
 
     def _generate_metric_code(self, name: str) -> str:
-        """Generate unique metric code from name."""
+        """Generate metric code from name (deterministic, no UUID suffix).
+
+        Same name = same code = same metric/category (duplicate/synonym).
+        """
         # Transliterate Russian to Latin
         translit_map = {
             'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
@@ -571,35 +579,32 @@ class MetricGenerationService:
         code = ''.join(result)
         code = re.sub(r'_+', '_', code).strip('_')
 
-        # Limit length and add uniqueness
-        if len(code) > 40:
-            code = code[:40]
+        # Limit length (no UUID suffix - deterministic code)
+        if len(code) > 50:
+            code = code[:50]
 
-        code = f"{code}_{uuid.uuid4().hex[:6]}"
         return code
 
     async def get_or_create_category(self, category_name: str) -> MetricCategory:
         """
         Get existing category or create new one.
 
-        Uses savepoint pattern to handle concurrent creation attempts gracefully.
-        If IntegrityError occurs (duplicate code), rolls back to savepoint and
-        returns the existing category.
+        Uses deterministic code generation: same name = same code = same category.
+        If category with this code exists, returns it (treats as synonym/duplicate).
         """
         from sqlalchemy.exc import IntegrityError
 
-        # Try to find existing (case-insensitive partial match)
+        # Generate deterministic code from name
+        code = self._generate_metric_code(category_name)
+
+        # Try to find existing by code (exact match)
         result = await self.db.execute(
-            select(MetricCategory).where(
-                MetricCategory.name.ilike(f"%{category_name}%")
-            )
+            select(MetricCategory).where(MetricCategory.code == code)
         )
         existing = result.scalars().first()
         if existing:
+            logger.debug(f"Category '{category_name}' matched existing '{existing.name}' by code '{code}'")
             return existing
-
-        # Create new category with savepoint protection
-        code = self._generate_metric_code(category_name)[:50]
 
         # Get max sort_order
         result = await self.db.execute(
@@ -614,39 +619,44 @@ class MetricGenerationService:
         )
 
         try:
-            # Use savepoint so IntegrityError doesn't abort outer transaction
             async with self.db.begin_nested():
                 self.db.add(category)
                 await self.db.flush()
             return category
         except IntegrityError:
-            # Another request created the same category concurrently
-            # Rollback handled by begin_nested context manager
+            # Concurrent creation - fetch existing by code
             logger.info(f"Category '{category_name}' created concurrently, fetching existing")
-            await self.db.rollback()  # Ensure clean state
+            await self.db.rollback()
             result = await self.db.execute(
-                select(MetricCategory).where(
-                    MetricCategory.name.ilike(f"%{category_name}%")
-                )
+                select(MetricCategory).where(MetricCategory.code == code)
             )
             existing = result.scalars().first()
             if existing:
                 return existing
-            # If still not found, re-raise (shouldn't happen)
             raise
 
-    async def create_pending_metric(
+    async def get_or_create_pending_metric(
         self,
         metric_data: ExtractedMetricData,
-    ) -> MetricDef:
+    ) -> tuple[MetricDef, bool]:
         """
-        Create a new metric in PENDING moderation status.
+        Get existing metric by code or create new one in PENDING status.
 
-        Uses savepoint pattern to handle potential constraint violations gracefully.
+        Uses deterministic code generation: same name = same code = same metric.
+        Returns tuple of (metric, created) where created=False if metric existed.
         """
         from sqlalchemy.exc import IntegrityError
 
         code = self._generate_metric_code(metric_data.name)
+
+        # Check if metric with this code already exists
+        result = await self.db.execute(
+            select(MetricDef).where(MetricDef.code == code)
+        )
+        existing = result.scalars().first()
+        if existing:
+            logger.debug(f"Metric '{metric_data.name}' matched existing '{existing.name}' by code '{code}'")
+            return existing, False
 
         # Get or create category
         category_id = None
@@ -685,21 +695,27 @@ class MetricGenerationService:
 
                 # Add suggested synonyms
                 for synonym in metric_data.synonyms[:5]:
-                    # Check if synonym already exists
-                    existing = await self.db.execute(
+                    existing_syn = await self.db.execute(
                         select(MetricSynonym).where(MetricSynonym.synonym == synonym)
                     )
-                    if not existing.scalars().first():
+                    if not existing_syn.scalars().first():
                         self.db.add(MetricSynonym(
                             metric_def_id=metric.id,
                             synonym=synonym,
                         ))
 
                 await self.db.flush()
-            return metric
-        except IntegrityError as e:
-            logger.warning(f"IntegrityError creating metric '{metric_data.name}': {e}")
+            return metric, True
+        except IntegrityError:
+            # Concurrent creation - fetch existing by code
+            logger.info(f"Metric '{metric_data.name}' created concurrently, fetching existing")
             await self.db.rollback()
+            result = await self.db.execute(
+                select(MetricDef).where(MetricDef.code == code)
+            )
+            existing = result.scalars().first()
+            if existing:
+                return existing, False
             raise
 
     async def match_existing_metric(
@@ -708,12 +724,36 @@ class MetricGenerationService:
         existing_metrics: list[dict[str, Any]],
         existing_synonyms: list[dict[str, str]],
     ) -> MetricDef | None:
-        """Try to match metric with existing definition."""
-        name_lower = metric_data.name.lower().strip()
+        """
+        Try to match metric with existing definition.
 
-        # Check exact name match
+        Uses normalized comparison to handle:
+        - Case differences (Нормативность vs нормативность)
+        - Unicode variations (NFKC normalization)
+        - Extra whitespace
+        """
+        import unicodedata
+
+        def normalize_name(name: str | None) -> str:
+            """Normalize name for comparison: lowercase, strip, unicode NFKC."""
+            if not name:
+                return ""
+            # NFKC normalization handles compatibility characters
+            return unicodedata.normalize("NFKC", name.lower().strip())
+
+        name_normalized = normalize_name(metric_data.name)
+        if not name_normalized:
+            return None
+
+        # Check exact name match (both name and name_ru)
         for m in existing_metrics:
-            if m["name"].lower() == name_lower or (m.get("name_ru") and m["name_ru"].lower() == name_lower):
+            if normalize_name(m["name"]) == name_normalized:
+                result = await self.db.execute(
+                    select(MetricDef).where(MetricDef.code == m["code"])
+                )
+                return result.scalars().first()
+
+            if normalize_name(m.get("name_ru")) == name_normalized:
                 result = await self.db.execute(
                     select(MetricDef).where(MetricDef.code == m["code"])
                 )
@@ -721,7 +761,7 @@ class MetricGenerationService:
 
         # Check synonym match
         for s in existing_synonyms:
-            if s["synonym"].lower() == name_lower:
+            if normalize_name(s["synonym"]) == name_normalized:
                 result = await self.db.execute(
                     select(MetricDef).where(MetricDef.code == s["metric_code"])
                 )
@@ -734,10 +774,11 @@ class MetricGenerationService:
         extracted: ExtractedMetricData,
     ) -> tuple[MetricDef | None, float]:
         """
-        Semantic matching of extracted metric using vector similarity.
+        Semantic matching of extracted metric using RAG + LLM decision.
 
-        Uses embedding service to find similar metrics, then AI to decide
-        if it's a true duplicate or a new metric.
+        Uses embedding service to find similar metrics (RAG), then AI to decide
+        if it's a true duplicate or a new metric. This method uses the same
+        logic as the PDF extraction RAG mapping to ensure consistency.
 
         Args:
             extracted: Extracted metric data from document
@@ -745,119 +786,156 @@ class MetricGenerationService:
         Returns:
             (matched_metric, similarity) or (None, 0.0) if no match
         """
-        # Build search text from name and description
-        search_text = f"{extracted.name} | {extracted.description or ''}"
+        from app.services.metric_mapping_llm_decision import decide_metric_mapping
+        from app.core.ai_factory import create_ai_client
 
-        # Find similar metrics using vector search
+        # Build search text - prioritize name for better matching
+        search_text = extracted.name
+
+        # Find similar metrics using vector search (RAG)
+        # Use lower threshold to get more candidates for LLM to decide
         try:
-            similar = await self.embedding_service.find_similar(
+            candidates = await self.embedding_service.find_similar(
                 search_text,
-                top_k=5,
-                threshold=settings.embedding_similarity_threshold,
+                top_k=10,  # Get more candidates for LLM
+                threshold=settings.rag_candidate_min_threshold,  # Use same threshold as RAG mapping (0.5)
             )
         except Exception as e:
-            logger.warning(f"Semantic search failed, falling back to exact match: {e}")
+            logger.warning(f"Semantic search failed: {e}")
             return None, 0.0
 
-        if not similar:
-            return None, 0.0
+        if not candidates:
+            # Second chance: try LLM with metrics from same category
+            candidates = await self._get_category_fallback_candidates(extracted)
+            if not candidates:
+                logger.debug(
+                    "no_candidates_even_with_fallback",
+                    extra={"extracted_name": extracted.name, "category": extracted.category},
+                )
+                return None, 0.0
+            logger.debug(
+                "using_category_fallback_candidates",
+                extra={
+                    "extracted_name": extracted.name,
+                    "category": extracted.category,
+                    "candidate_count": len(candidates),
+                },
+            )
 
-        # If only one candidate with very high similarity (>0.9) - auto-match
-        if len(similar) == 1 and similar[0]["similarity"] > 0.9:
-            metric = await self.db.get(MetricDef, similar[0]["metric_def_id"])
+        # Auto-match: if top candidate has very high similarity (>= 0.95), skip LLM
+        auto_match_threshold = settings.rag_auto_match_threshold  # 0.95
+        if candidates[0]["similarity"] >= auto_match_threshold:
+            metric = await self.db.get(MetricDef, candidates[0]["metric_def_id"])
             logger.info(
                 "semantic_auto_match",
                 extra={
                     "extracted_name": extracted.name,
-                    "matched_code": similar[0]["code"],
-                    "similarity": similar[0]["similarity"],
+                    "matched_code": candidates[0]["code"],
+                    "similarity": candidates[0]["similarity"],
+                    "threshold": auto_match_threshold,
                 },
             )
-            return metric, similar[0]["similarity"]
+            return metric, candidates[0]["similarity"]
 
-        # Multiple candidates or lower similarity - ask AI to decide
-        decision = await self._ai_decide_match(extracted, similar)
+        # Use LLM to decide the best match from candidates
+        # This uses the same logic as report_rag_mapping.py for consistency
+        ai_client = create_ai_client()
+        try:
+            decision = await decide_metric_mapping(
+                ai_client=ai_client,
+                label=extracted.name,
+                candidates=candidates,
+                min_confidence=0.6,
+                description=extracted.description,
+            )
+        except Exception as e:
+            logger.error(f"LLM decision failed: {e}")
+            return None, 0.0
+        finally:
+            await ai_client.close()
 
-        if decision.get("is_duplicate") and decision.get("matched_code"):
+        if decision["status"] == "mapped" and decision["code"]:
+            # Find the metric by code
             result = await self.db.execute(
-                select(MetricDef).where(MetricDef.code == decision["matched_code"])
+                select(MetricDef).where(MetricDef.code == decision["code"])
             )
             metric = result.scalars().first()
             if metric:
                 logger.info(
-                    "semantic_ai_match",
+                    "semantic_llm_match",
                     extra={
                         "extracted_name": extracted.name,
-                        "matched_code": decision["matched_code"],
-                        "confidence": decision.get("confidence", 0.8),
-                        "reasoning": decision.get("reasoning", ""),
+                        "matched_code": decision["code"],
+                        "confidence": decision.get("confidence", 0.0),
+                        "reason": decision.get("reason", ""),
                     },
                 )
                 return metric, decision.get("confidence", 0.8)
 
+        # LLM decided unknown or ambiguous - treat as no match (create new)
+        logger.debug(
+            "semantic_llm_no_match",
+            extra={
+                "extracted_name": extracted.name,
+                "status": decision["status"],
+                "reason": decision.get("reason", ""),
+            },
+        )
         return None, 0.0
 
-    async def _ai_decide_match(
+    async def _get_category_fallback_candidates(
         self,
         extracted: ExtractedMetricData,
-        candidates: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+        max_candidates: int = 15,
+    ) -> list[dict[str, Any]]:
         """
-        Use AI to decide if extracted metric is a duplicate of any candidate.
+        Fallback: get metrics from same category for LLM matching.
 
-        Args:
-            extracted: Extracted metric data
-            candidates: List of similar metrics from vector search
-
-        Returns:
-            Dict with is_duplicate, matched_code, confidence, reasoning
+        Used when RAG doesn't find candidates (similarity too low).
+        Returns metrics formatted as candidates for LLM decision.
         """
-        candidates_str = "\n".join(
-            f"- {c['name']} ({c['code']}): {c.get('description', 'нет описания')} "
-            f"[сходство: {c['similarity']:.2f}]"
-            for c in candidates
-        )
+        from sqlalchemy.orm import selectinload
 
-        prompt = f"""
-Извлечённая метрика из документа:
-- Название: {extracted.name}
-- Описание: {extracted.description or 'нет'}
+        query = select(MetricDef).where(
+            MetricDef.moderation_status == "APPROVED"
+        ).options(selectinload(MetricDef.category))
 
-Похожие метрики из справочника (найдены через semantic search):
-{candidates_str}
-
-Задача: Определи, является ли извлечённая метрика дубликатом одной из метрик в справочнике.
-
-Критерии дубликата:
-1. Семантически идентичное или очень близкое значение
-2. Одна метрика может быть переформулировкой другой
-3. Разные формулировки одного и того же показателя
-
-Ответь строго в JSON формате:
-{{
-  "is_duplicate": true/false,
-  "matched_code": "код_метрики" или null,
-  "confidence": 0.0-1.0,
-  "reasoning": "краткое объяснение решения"
-}}
-"""
-        try:
-            response = await self._client.generate_text(
-                prompt=prompt,
-                response_mime_type="application/json",
-                timeout=30,
+        # Filter by category if specified
+        if extracted.category:
+            category_code = self._generate_metric_code(extracted.category)
+            query = query.join(MetricCategory).where(
+                MetricCategory.code == category_code
             )
-            parsed = self._parse_ai_response(response)
 
-            if isinstance(parsed, dict) and "is_duplicate" in parsed:
-                return parsed
-            else:
-                logger.warning(f"AI match decision missing required fields or wrong type: {type(parsed).__name__}, {str(parsed)[:200]}")
-                return {"is_duplicate": False, "matched_code": None, "confidence": 0.0}
+        query = query.limit(max_candidates)
+        result = await self.db.execute(query)
+        metrics = result.scalars().all()
 
-        except Exception as e:
-            logger.error(f"AI match decision failed: {e}")
-            return {"is_duplicate": False, "matched_code": None, "confidence": 0.0}
+        if not metrics:
+            return []
+
+        # Format as candidates (similarity=0 since not from RAG)
+        candidates = []
+        for m in metrics:
+            candidates.append({
+                "metric_def_id": m.id,
+                "code": m.code,
+                "name": m.name,
+                "name_ru": m.name_ru,
+                "description": m.description or "",
+                "category": m.category.name if m.category else None,
+                "similarity": 0.0,  # Not from RAG, just category match
+            })
+
+        logger.debug(
+            "category_fallback_candidates",
+            extra={
+                "extracted_name": extracted.name,
+                "category": extracted.category,
+                "found_count": len(candidates),
+            },
+        )
+        return candidates
 
     async def _add_synonym_if_new(
         self,
@@ -1041,10 +1119,14 @@ class MetricGenerationService:
                             f"(similarity={similarity:.2f})"
                         )
                     else:
-                        # Create new pending metric
-                        await self.create_pending_metric(metric_data)
-                        result["metrics_created"] += 1
-                        result["synonyms_suggested"] += len(metric_data.synonyms)
+                        # Get or create metric (same name = same code = duplicate)
+                        metric, created = await self.get_or_create_pending_metric(metric_data)
+                        if created:
+                            result["metrics_created"] += 1
+                            result["synonyms_suggested"] += len(metric_data.synonyms)
+                        else:
+                            result["metrics_matched"] += 1
+                            logger.info(f"Duplicate by code: '{metric_data.name}' → '{metric.name}'")
 
                 except Exception as e:
                     # Log error but continue processing remaining metrics
