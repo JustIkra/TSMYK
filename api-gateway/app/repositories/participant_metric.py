@@ -4,14 +4,14 @@ Repository layer for ParticipantMetric data access.
 Handles all database operations for participant's actual metrics with upsert logic.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ParticipantMetric
+from app.db.models import ParticipantMetric, Report
 
 
 class ParticipantMetricRepository:
@@ -19,6 +19,26 @@ class ParticipantMetricRepository:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _normalize_dt_utc(value: datetime | None) -> datetime:
+        if value is None:
+            return datetime.min.replace(tzinfo=UTC)
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    @staticmethod
+    def _to_decimal(value: Decimal | float | int | str | None) -> Decimal:
+        if value is None:
+            return Decimal("0")
+        if isinstance(value, Decimal):
+            return value
+        return Decimal(str(value))
+
+    async def _get_report_uploaded_at(self, report_id: UUID) -> datetime | None:
+        result = await self.db.execute(select(Report.uploaded_at).where(Report.id == report_id))
+        return result.scalar_one_or_none()
 
     async def upsert(
         self,
@@ -29,10 +49,12 @@ class ParticipantMetricRepository:
         source_report_id: UUID,
     ) -> ParticipantMetric:
         """
-        Upsert a participant metric - always update with new value.
+        Upsert a participant metric, keeping the best value when duplicates occur.
 
-        When re-extracting metrics, we always want to update the participant's
-        metric with the latest extracted value, regardless of report upload date.
+        Priority rules for replacing an existing (participant_id, metric_code) value:
+        1) Higher value wins
+        2) On tie, higher confidence wins (None treated as 0)
+        3) On tie, more recent source report (report.uploaded_at) wins
 
         Args:
             participant_id: UUID of the participant
@@ -48,11 +70,35 @@ class ParticipantMetricRepository:
         existing = await self.get_by_participant_and_code(participant_id, metric_code)
 
         if existing:
-            # Always update existing record with new value
+            existing_value = self._to_decimal(existing.value)
+            new_value = self._to_decimal(value)
+
+            should_replace = new_value > existing_value
+
+            if not should_replace and new_value == existing_value:
+                existing_confidence = self._to_decimal(existing.confidence)
+                new_confidence = self._to_decimal(confidence)
+
+                should_replace = new_confidence > existing_confidence
+
+                if not should_replace and new_confidence == existing_confidence:
+                    new_uploaded_at = self._normalize_dt_utc(await self._get_report_uploaded_at(source_report_id))
+                    existing_uploaded_at = self._normalize_dt_utc(
+                        await self._get_report_uploaded_at(existing.last_source_report_id)
+                        if existing.last_source_report_id
+                        else None
+                    )
+
+                    should_replace = new_uploaded_at > existing_uploaded_at
+
+            if not should_replace:
+                return existing
+
+            # Replace existing record with the better value
             existing.value = value
             existing.confidence = confidence
             existing.last_source_report_id = source_report_id
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(UTC)
             await self.db.commit()
             await self.db.refresh(existing)
             return existing
