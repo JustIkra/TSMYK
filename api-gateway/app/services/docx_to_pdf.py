@@ -37,15 +37,15 @@ def convert_docx_bytes_to_pdf_bytes(docx_data: bytes) -> bytes:
                 check=False,
             )
 
-            if result.returncode != 0:
-                stderr = result.stderr.decode("utf-8", errors="replace")
-                raise RuntimeError(f"LibreOffice conversion failed: {stderr}")
-
             pdf_path = Path(tmpdir) / "input.pdf"
+
+            # Check if PDF was created (ignore warnings like javaldx)
             if not pdf_path.exists():
+                stderr = result.stderr.decode("utf-8", errors="replace")
+                stdout = result.stdout.decode("utf-8", errors="replace")
                 raise RuntimeError(
-                    "LibreOffice conversion produced no output file. "
-                    f"stdout: {result.stdout.decode('utf-8', errors='replace')}"
+                    f"LibreOffice conversion failed (code {result.returncode}): "
+                    f"stderr={stderr}, stdout={stdout}"
                 )
 
             pdf_data = pdf_path.read_bytes()
