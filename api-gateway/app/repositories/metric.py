@@ -333,11 +333,10 @@ class MetricDefRepository:
             Dict with usage statistics including:
             - extracted_metrics_count: Number of extracted metric values
             - participant_metrics_count: Number of participant metric values
-            - scoring_results_count: Number of scoring results affected
             - weight_tables_count: Number of weight tables using this metric
             - reports_affected: Number of unique reports with this metric
         """
-        from app.db.models import ParticipantMetric, ScoringResult
+        from app.db.models import ParticipantMetric
 
         # Get the metric to find its code
         metric_def = await self.get_by_id(metric_def_id)
@@ -346,7 +345,6 @@ class MetricDefRepository:
                 "metric_id": metric_def_id,
                 "extracted_metrics_count": 0,
                 "participant_metrics_count": 0,
-                "scoring_results_count": 0,
                 "weight_tables_count": 0,
                 "reports_affected": 0,
             }
@@ -379,29 +377,17 @@ class MetricDefRepository:
         weight_tables = weight_tables_list_result.scalars().all()
 
         weight_tables_count = 0
-        weight_table_ids = []
         for wt in weight_tables:
             if wt.weights:
                 for weight_entry in wt.weights:
                     if weight_entry.get("metric_code") == metric_def.code:
                         weight_tables_count += 1
-                        weight_table_ids.append(wt.id)
                         break
-
-        # Count scoring results that used weight tables containing this metric
-        scoring_results_count = 0
-        if weight_table_ids:
-            scoring_stmt = select(func.count(ScoringResult.id)).where(
-                ScoringResult.weight_table_id.in_(weight_table_ids)
-            )
-            scoring_result = await self.db.execute(scoring_stmt)
-            scoring_results_count = scoring_result.scalar() or 0
 
         return {
             "metric_id": metric_def_id,
             "extracted_metrics_count": extracted_count,
             "participant_metrics_count": participant_metrics_count,
-            "scoring_results_count": scoring_results_count,
             "weight_tables_count": weight_tables_count,
             "reports_affected": reports_count,
         }

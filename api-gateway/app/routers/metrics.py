@@ -386,7 +386,6 @@ async def get_metric_usage_stats(
         metric_id=stats["metric_id"],
         extracted_metrics_count=stats["extracted_metrics_count"],
         participant_metrics_count=stats["participant_metrics_count"],
-        scoring_results_count=stats["scoring_results_count"],
         weight_tables_count=stats["weight_tables_count"],
         reports_affected=stats["reports_affected"],
     )

@@ -1,12 +1,11 @@
 """
 Comprehensive tests for participant management endpoints.
 
-Tests CRUD operations, pagination, filtering, metrics management,
-scoring history, and final report generation.
+Tests CRUD operations, pagination, filtering, and metrics management.
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -18,7 +17,6 @@ from app.db.models import (
     Participant,
     ParticipantMetric,
     ProfActivity,
-    ScoringResult,
     WeightTable,
 )
 from tests.conftest import get_auth_header
@@ -153,45 +151,6 @@ async def prof_activity_with_weights(db_session: AsyncSession) -> tuple[ProfActi
     await db_session.refresh(prof_activity)
     await db_session.refresh(weight_table)
     return prof_activity, weight_table
-
-
-@pytest.fixture
-async def participant_with_scoring(
-    db_session: AsyncSession,
-    sample_participant: Participant,
-    prof_activity_with_weights: tuple[ProfActivity, WeightTable],
-) -> tuple[Participant, ScoringResult, ProfActivity]:
-    """Create a participant with a scoring result."""
-    prof_activity, weight_table = prof_activity_with_weights
-
-    scoring_result = ScoringResult(
-        id=uuid.uuid4(),
-        participant_id=sample_participant.id,
-        weight_table_id=weight_table.id,
-        score_pct=Decimal("85.50"),
-        strengths=[
-            {
-                "metric_code": "communication",
-                "metric_name": "Communication",
-                "value": "9.0",
-                "weight": "0.3",
-            }
-        ],
-        dev_areas=[
-            {
-                "metric_code": "teamwork",
-                "metric_name": "Teamwork",
-                "value": "6.0",
-                "weight": "0.3",
-            }
-        ],
-        computed_at=datetime.utcnow(),
-        compute_notes="Test scoring",
-    )
-    db_session.add(scoring_result)
-    await db_session.commit()
-    await db_session.refresh(scoring_result)
-    return sample_participant, scoring_result, prof_activity
 
 
 # CREATE Tests
@@ -728,231 +687,6 @@ async def test_update_participant_metric_not_found(
     )
 
     assert response.status_code == 404
-
-
-# Scoring History Tests
-
-
-@pytest.mark.integration
-async def test_get_scoring_history_empty(user_client: AsyncClient, sample_participant: Participant):
-    """Test getting scoring history for participant with no scores."""
-    response = await user_client.get(f"/api/participants/{sample_participant.id}/scores")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["results"] == []
-    assert data["total"] == 0
-
-
-@pytest.mark.integration
-async def test_get_scoring_history_with_data(
-    user_client: AsyncClient,
-    participant_with_scoring: tuple[Participant, ScoringResult, ProfActivity],
-):
-    """Test getting scoring history with scoring results."""
-    participant, scoring_result, prof_activity = participant_with_scoring
-
-    response = await user_client.get(f"/api/participants/{participant.id}/scores")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["total"] == 1
-    assert len(data["results"]) == 1
-
-    result = data["results"][0]
-    assert result["id"] == str(scoring_result.id)
-    assert result["prof_activity_code"] == prof_activity.code
-    assert result["score_pct"] == 85.5
-    assert len(result["strengths"]) == 1
-    assert len(result["dev_areas"]) == 1
-
-
-@pytest.mark.integration
-async def test_get_scoring_history_with_limit(
-    user_client: AsyncClient,
-    participant_with_scoring: tuple[Participant, ScoringResult, ProfActivity],
-    db_session: AsyncSession,
-):
-    """Test scoring history with custom limit."""
-    participant, first_result, _ = participant_with_scoring
-
-    # Create second scoring result
-    second_result = ScoringResult(
-        id=uuid.uuid4(),
-        participant_id=participant.id,
-        weight_table_id=first_result.weight_table_id,
-        score_pct=Decimal("90.00"),
-        computed_at=datetime.utcnow() + timedelta(days=1),  # More recent
-    )
-    db_session.add(second_result)
-    await db_session.commit()
-
-    response = await user_client.get(f"/api/participants/{participant.id}/scores?limit=1")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["total"] == 1
-    # Should return the most recent one
-    assert data["results"][0]["score_pct"] == 90.0
-
-
-@pytest.mark.integration
-async def test_get_scoring_history_participant_not_found(user_client: AsyncClient):
-    """Test getting scoring history for non-existent participant."""
-    non_existent_id = uuid.uuid4()
-    response = await user_client.get(f"/api/participants/{non_existent_id}/scores")
-
-    assert response.status_code == 404
-
-
-@pytest.mark.integration
-async def test_get_scoring_history_invalid_limit(
-    user_client: AsyncClient,
-    sample_participant: Participant,
-):
-    """Test scoring history with invalid limit."""
-    response = await user_client.get(f"/api/participants/{sample_participant.id}/scores?limit=0")
-    assert response.status_code == 422
-
-    response = await user_client.get(f"/api/participants/{sample_participant.id}/scores?limit=101")
-    assert response.status_code == 422
-
-
-# Final Report Tests
-
-
-@pytest.mark.integration
-async def test_get_final_report_json(
-    user_client: AsyncClient,
-    participant_with_scoring: tuple[Participant, ScoringResult, ProfActivity],
-    db_session: AsyncSession,
-    metric_def: MetricDef,
-):
-    """Test getting final report in JSON format."""
-    participant, scoring_result, prof_activity = participant_with_scoring
-
-    # Add participant metric to generate full report
-    participant_metric = ParticipantMetric(
-        id=uuid.uuid4(),
-        participant_id=participant.id,
-        metric_code="communication",
-        value=Decimal("9.0"),
-        confidence=Decimal("0.95"),
-        updated_at=datetime.utcnow(),
-    )
-    db_session.add(participant_metric)
-    await db_session.commit()
-
-    response = await user_client.get(
-        f"/api/participants/{participant.id}/final-report?activity_code={prof_activity.code}&format=json"
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-
-    # Verify structure
-    assert data["participant_id"] == str(participant.id)
-    assert data["participant_name"] == participant.full_name
-    assert data["prof_activity_code"] == prof_activity.code
-    assert "score_pct" in data
-    assert "strengths" in data
-    assert "dev_areas" in data
-    # recommendations field removed in cleanup
-    assert "metrics" in data
-
-
-@pytest.mark.integration
-async def test_get_final_report_html(
-    user_client: AsyncClient,
-    participant_with_scoring: tuple[Participant, ScoringResult, ProfActivity],
-    db_session: AsyncSession,
-):
-    """Test getting final report in HTML format."""
-    participant, _, prof_activity = participant_with_scoring
-
-    # Add participant metric
-    participant_metric = ParticipantMetric(
-        id=uuid.uuid4(),
-        participant_id=participant.id,
-        metric_code="communication",
-        value=Decimal("9.0"),
-        updated_at=datetime.utcnow(),
-    )
-    db_session.add(participant_metric)
-    await db_session.commit()
-
-    response = await user_client.get(
-        f"/api/participants/{participant.id}/final-report?activity_code={prof_activity.code}&format=html"
-    )
-
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-    assert b"<!DOCTYPE html>" in response.content or b"<html" in response.content
-
-
-@pytest.mark.integration
-async def test_get_final_report_participant_not_found(user_client: AsyncClient):
-    """Test final report for non-existent participant."""
-    non_existent_id = uuid.uuid4()
-    response = await user_client.get(
-        f"/api/participants/{non_existent_id}/final-report?activity_code=developer"
-    )
-
-    # Should return 400 or 404 depending on the error
-    assert response.status_code in [400, 404]
-
-
-@pytest.mark.integration
-async def test_get_final_report_no_weight_table(
-    user_client: AsyncClient,
-    sample_participant: Participant,
-    db_session: AsyncSession,
-):
-    """Test final report when no weight table exists for the activity.
-
-    Creates a ProfActivity without a WeightTable to trigger the weight table validation error.
-    """
-    # Create activity without weight table
-    activity = ProfActivity(
-        id=uuid.uuid4(),
-        code="developer_no_weights",
-        name="Developer (No Weights)",
-    )
-    db_session.add(activity)
-    await db_session.commit()
-
-    response = await user_client.get(
-        f"/api/participants/{sample_participant.id}/final-report?activity_code=developer_no_weights"
-    )
-
-    assert response.status_code == 400
-    assert "weight table" in response.json()["detail"].lower()
-
-
-@pytest.mark.integration
-async def test_get_final_report_invalid_activity(
-    user_client: AsyncClient,
-    participant_with_scoring: tuple[Participant, ScoringResult, ProfActivity],
-):
-    """Test final report with non-existent activity code."""
-    participant, _, _ = participant_with_scoring
-
-    response = await user_client.get(
-        f"/api/participants/{participant.id}/final-report?activity_code=nonexistent"
-    )
-
-    assert response.status_code == 400
-
-
-@pytest.mark.integration
-async def test_get_final_report_missing_activity_code(
-    user_client: AsyncClient,
-    sample_participant: Participant,
-):
-    """Test final report without activity_code parameter."""
-    response = await user_client.get(f"/api/participants/{sample_participant.id}/final-report")
-
-    assert response.status_code == 422  # Missing required parameter
 
 
 # Authorization Tests

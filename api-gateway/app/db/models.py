@@ -594,60 +594,6 @@ class ParticipantMetric(Base):
         return f"<ParticipantMetric(id={self.id}, participant_id={self.participant_id}, metric_code={self.metric_code}, value={self.value})>"
 
 
-# ScoringResult Table
-class ScoringResult(Base):
-    """
-    Scoring result for a participant's professional fitness assessment.
-
-    Stores calculated scores, weight table version, and optional analysis data.
-    History is preserved - multiple results can exist for the same participant.
-
-    Fields:
-    - score_pct: Calculated percentage score (0-100), quantized to 0.01
-    - strengths: JSONB array of top-performing metrics
-    - dev_areas: JSONB array of development areas (low-scoring metrics)
-    """
-
-    __tablename__ = "scoring_result"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    participant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("participant.id", ondelete="CASCADE"), nullable=False
-    )
-    weight_table_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("weight_table.id", ondelete="RESTRICT"), nullable=False
-    )
-    score_pct: Mapped[float] = mapped_column(sa.Numeric(5, 2), nullable=False)
-    strengths: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
-    dev_areas: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
-    computed_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
-    )
-    compute_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Relationships
-    participant: Mapped["Participant"] = relationship("Participant")
-    weight_table: Mapped["WeightTable"] = relationship("WeightTable")
-
-    # Constraints
-    __table_args__ = (
-        CheckConstraint(
-            "score_pct >= 0 AND score_pct <= 100",
-            name="scoring_result_score_range_check",
-        ),
-        Index("ix_scoring_result_participant_id", "participant_id"),
-        Index("ix_scoring_result_computed_at", "computed_at"),
-        Index(
-            "ix_scoring_result_participant_computed",
-            "participant_id",
-            "computed_at",
-        ),
-    )
-
-    def __repr__(self) -> str:
-        return f"<ScoringResult(id={self.id}, participant_id={self.participant_id}, score_pct={self.score_pct})>"
-
-
 # MetricAuditLog Table
 class MetricAuditLog(Base):
     """

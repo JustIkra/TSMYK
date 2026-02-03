@@ -68,38 +68,6 @@ class MessageResponse(BaseModel):
     message: str
 
 
-# Scoring History Schemas
-
-class MetricItem(BaseModel):
-    """Metric item for strengths/dev_areas in scoring history."""
-
-    metric_code: str
-    metric_name: str
-    value: str  # Decimal as string
-    weight: str  # Decimal as string
-
-
-class ScoringHistoryItem(BaseModel):
-    """Single scoring result item in history."""
-
-    id: UUID
-    prof_activity_code: str
-    prof_activity_name: str
-    score_pct: float
-    strengths: list[MetricItem] | None = None
-    dev_areas: list[MetricItem] | None = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class ScoringHistoryResponse(BaseModel):
-    """Response schema for scoring history list."""
-
-    results: list[ScoringHistoryItem]
-    total: int
-
-
 # Participant Metrics Schemas
 
 class ParticipantMetricResponse(BaseModel):

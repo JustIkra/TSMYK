@@ -28,7 +28,6 @@ from app.routers import (
     participants,
     prof_activities,
     reports,
-    scoring,
     weights,
 )
 
@@ -209,7 +208,6 @@ app.include_router(weights.router, prefix="/api/admin", tags=["Weights"])
 app.include_router(metric_categories.router, prefix="/api", tags=["Metric Categories"])
 app.include_router(metrics.router)
 app.include_router(metric_synonyms.router)
-app.include_router(scoring.router, prefix="/api", tags=["Scoring"])
 
 
 # Static Files & SPA Fallback

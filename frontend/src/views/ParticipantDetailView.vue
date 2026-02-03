@@ -23,13 +23,6 @@
                 <el-icon><DataLine /></el-icon>
                 Метрики
               </el-button>
-              <el-button
-                type="primary"
-                @click="showScoringDialog = true"
-              >
-                <el-icon><TrendCharts /></el-icon>
-                Рассчитать пригодность
-              </el-button>
             </div>
           </div>
         </template>
@@ -78,30 +71,6 @@
           @delete="handleDeleteReport"
           @upload="showUploadDialog = true"
         />
-      </el-card>
-
-      <!-- Scoring Results Section -->
-      <el-card
-        v-if="scoringResults.length > 0"
-        class="section-card"
-      >
-        <template #header>
-          <h3>История оценок пригодности</h3>
-        </template>
-
-        <el-timeline>
-          <el-timeline-item
-            v-for="result in scoringResults"
-            :key="result.id"
-            :timestamp="formatDate(result.created_at)"
-            placement="top"
-          >
-            <ScoringResultCard
-              :result="result"
-              @download-pdf="downloadFinalReportPdf"
-            />
-          </el-timeline-item>
-        </el-timeline>
       </el-card>
 
       <!-- Upload Dialog -->
@@ -208,70 +177,6 @@
         </template>
       </el-dialog>
 
-      <!-- Scoring Dialog -->
-      <el-dialog
-        v-model="showScoringDialog"
-        title="Рассчитать профессиональную пригодность"
-        :width="isMobile ? '95%' : '500px'"
-        destroy-on-close
-      >
-        <el-form
-          :model="scoringForm"
-          label-position="top"
-        >
-          <el-form-item
-            label="Профессиональная область"
-            required
-          >
-            <el-select
-              v-model="scoringForm.activityCode"
-              v-loading="loadingActivities"
-              placeholder="Выберите область"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="activity in profActivities"
-                :key="activity.code"
-                :label="activity.name"
-                :value="activity.code"
-              >
-                <span>{{ activity.name }}</span>
-                <span class="activity-code-hint">
-                  {{ activity.code }}
-                </span>
-              </el-option>
-            </el-select>
-          </el-form-item>
-          <el-alert
-            title="Убедитесь, что у участника загружены и обработаны отчёты с метриками"
-            type="info"
-            :closable="false"
-            show-icon
-          />
-          <el-alert
-            v-if="reports.length === 0"
-            title="У участника нет загруженных отчётов"
-            type="warning"
-            :closable="false"
-            show-icon
-            style="margin-top: 12px;"
-          />
-        </el-form>
-        <template #footer>
-          <el-button @click="showScoringDialog = false">
-            Отмена
-          </el-button>
-          <el-button
-            type="primary"
-            :loading="calculating"
-            :disabled="!scoringForm.activityCode || reports.length === 0"
-            @click="calculateScoring"
-          >
-            Рассчитать
-          </el-button>
-        </template>
-      </el-dialog>
-
       <!-- Metrics Dialog -->
       <el-dialog
         v-model="showMetricsDialog"
@@ -300,14 +205,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Upload,
-  Download,
   Delete,
-  TrendCharts,
   DataLine,
   Document,
   Loading,
@@ -318,10 +221,8 @@ import AppLayout from '@/components/AppLayout.vue'
 import MetricsEditor from '@/components/MetricsEditor.vue'
 import ReportList from '@/components/ReportList.vue'
 import ParticipantMetricsDrawer from '@/components/ParticipantMetricsDrawer.vue'
-import ScoringResultCard from '@/components/ScoringResultCard.vue'
 import { useParticipantsStore, useMetricsStore } from '@/stores'
-import { reportsApi, profActivitiesApi, scoringApi, participantsApi } from '@/api'
-import { formatFromApi } from '@/utils/numberFormat'
+import { reportsApi, participantsApi } from '@/api'
 import { formatDate } from '@/utils/dateFormat'
 import { useResponsive } from '@/composables/useResponsive'
 
@@ -335,14 +236,10 @@ const loadingReports = ref(false)
 
 // Mobile responsiveness
 const { isMobile } = useResponsive()
-const loadingActivities = ref(false)
 const uploading = ref(false)
-const calculating = ref(false)
 
 const participant = computed(() => participantsStore.currentParticipant)
 const reports = ref([])
-const scoringResults = ref([])
-const profActivities = ref([])
 const currentReportId = ref(null)
 
 // Use cached metric definitions from store
@@ -369,7 +266,6 @@ const currentReportExtractWarning = computed(() => {
 })
 
 const showUploadDialog = ref(false)
-const showScoringDialog = ref(false)
 const showMetricsDialog = ref(false)
 const showMetricsDrawer = ref(false)
 
@@ -379,11 +275,6 @@ const fileList = ref([])
 // Batch upload state
 const batchFiles = ref([])
 let fileIdCounter = 0
-
-const scoringForm = reactive({
-  activityCode: ''
-})
-
 
 const loadParticipant = async () => {
   loading.value = true
@@ -411,49 +302,6 @@ const loadReports = async ({ silent = false } = {}) => {
     if (!silent) {
       loadingReports.value = false
     }
-  }
-}
-
-const normalizeScoringResult = (item) => {
-  if (!item) return item
-  const recommendations = Array.isArray(item.recommendations) ? item.recommendations : []
-  let status = item.recommendations_status || item.recommendationsStatus || null
-
-  if (!status) {
-    status = recommendations.length > 0 ? 'ready' : 'pending'
-  }
-
-  const numericScore = Number(item.score_pct)
-  const scorePct = Number.isNaN(numericScore) ? item.score_pct : numericScore
-
-  return {
-    ...item,
-    score_pct: scorePct,
-    recommendations,
-    recommendations_status: status,
-    recommendations_error: item.recommendations_error || item.recommendationsError || null
-  }
-}
-
-const loadScoringResults = async () => {
-  try {
-    const response = await scoringApi.getHistory(route.params.id)
-    const items = Array.isArray(response.items) ? response.items : []
-    scoringResults.value = items.map(normalizeScoringResult)
-  } catch (error) {
-    console.error('Error loading scoring results:', error)
-  }
-}
-
-const loadProfActivities = async () => {
-  loadingActivities.value = true
-  try {
-    const response = await profActivitiesApi.list()
-    profActivities.value = response || []
-  } catch (error) {
-    ElMessage.error('Ошибка загрузки профессиональных областей')
-  } finally {
-    loadingActivities.value = false
   }
 }
 
@@ -669,82 +517,11 @@ const handleDeleteReport = async (reportId) => {
   }
 }
 
-const calculateScoring = async () => {
-  if (!scoringForm.activityCode) {
-    ElMessage.warning('Выберите профессиональную область')
-    return
-  }
-
-  calculating.value = true
-  try {
-    const result = await scoringApi.calculate(route.params.id, scoringForm.activityCode)
-
-    // Добавляем новый результат в начало списка
-    const normalized = normalizeScoringResult({
-      id: result.scoring_result_id,
-      participant_id: route.params.id,
-      prof_activity_code: result.prof_activity_code || scoringForm.activityCode,
-      prof_activity_name: result.prof_activity_name,
-      score_pct: parseFloat(result.score_pct),
-      strengths: result.strengths || [],
-      dev_areas: result.dev_areas || [],
-      recommendations: result.recommendations || [],
-      recommendations_status:
-        result.recommendations_status ||
-        ((result.recommendations || []).length > 0 ? 'ready' : 'pending'),
-      recommendations_error: result.recommendations_error || null,
-      created_at: new Date().toISOString()
-    })
-    scoringResults.value.unshift(normalized)
-
-    ElMessage.success('Расчёт пригодности выполнен')
-    showScoringDialog.value = false
-    scoringForm.activityCode = ''
-  } catch (error) {
-    console.error('Scoring calculation error:', error)
-    const errorMessage = error.response?.data?.detail || 'Ошибка расчёта пригодности'
-    ElMessage.error(errorMessage)
-  } finally {
-    calculating.value = false
-  }
-}
-
-// Final Report
-const downloadFinalReportPdf = async (result) => {
-  if (!result.prof_activity_code) {
-    ElMessage.warning('Код профессиональной деятельности не найден')
-    return
-  }
-
-  try {
-    const response = await scoringApi.downloadFinalReportPdf(
-      route.params.id,
-      result.prof_activity_code,
-      result.id
-    )
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `final_report_${result.prof_activity_code}_${new Date().toISOString().split('T')[0]}.pdf`)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-    ElMessage.success('Отчёт PDF скачан')
-  } catch (error) {
-    const errorMessage = error.response?.data?.detail || 'Ошибка загрузки PDF отчёта'
-    ElMessage.error(errorMessage)
-  }
-}
-
-
 onMounted(async () => {
   // Parallel loading of independent data sources (eliminates waterfall)
   await Promise.all([
     loadParticipant(),
     loadReports(),
-    loadScoringResults(),
-    loadProfActivities(),
     loadMetricDefs()
   ])
 })
@@ -796,74 +573,6 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-.scoring-result {
-  margin-top: 16px;
-}
-
-.score-value {
-  margin-bottom: 20px;
-}
-
-.score-number {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--color-primary);
-  display: block;
-  margin-bottom: 12px;
-}
-
-.score-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-.score-section h5 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 12px 0;
-  color: var(--color-text-primary);
-}
-
-.score-section ul {
-  margin: 0;
-  padding-left: 20px;
-  list-style-type: disc;
-}
-
-.score-section li {
-  margin-bottom: 8px;
-  color: var(--color-text-regular);
-  line-height: 1.5;
-}
-
-
-.final-report-actions {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-lighter);
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.actions-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
-  width: 100%;
-}
-
-.actions-group .el-button {
-  width: 100%;
-  justify-content: center;
-}
-
-.actions-group__danger {
-  margin-top: 4px;
-}
-
 .reports-actions-group {
   display: flex;
   flex-direction: row;
@@ -883,12 +592,6 @@ onUnmounted(() => {
 
 .reports-table :deep(.el-table__cell) {
   text-align: center;
-}
-
-.activity-code-hint {
-  float: right;
-  color: var(--color-text-secondary);
-  font-size: 13px;
 }
 
 /* Batch upload styles */
@@ -978,15 +681,6 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .score-details {
-    grid-template-columns: 1fr;
-  }
-
-  .final-report-actions .el-button {
-    width: 100%;
-    min-height: 44px;
-  }
-
   .section-header {
     flex-direction: column;
     align-items: stretch;
@@ -1000,14 +694,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 375px) {
-  .score-number {
-    font-size: 24px;
-  }
-
-  .score-section h5 {
-    font-size: 14px;
-  }
-
   .card-header h2 {
     font-size: 18px;
   }

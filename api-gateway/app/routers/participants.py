@@ -8,17 +8,13 @@ All endpoints require authentication (ACTIVE user).
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_active_user
 from app.db.models import User
 from app.db.session import get_db
-from app.repositories.scoring_result import ScoringResultRepository
-from app.schemas.final_report import FinalReportResponse
 from app.schemas.participant import (
     MessageResponse,
-    MetricItem,
     ParticipantCreateRequest,
     ParticipantListResponse,
     ParticipantMetricResponse,
@@ -27,11 +23,8 @@ from app.schemas.participant import (
     ParticipantResponse,
     ParticipantSearchParams,
     ParticipantUpdateRequest,
-    ScoringHistoryItem,
-    ScoringHistoryResponse,
 )
 from app.services.participant import ParticipantService
-from app.services.scoring import ScoringService
 
 router = APIRouter(prefix="/participants", tags=["participants"])
 
@@ -165,159 +158,6 @@ async def delete_participant(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
     return MessageResponse(message="Participant deleted successfully")
-
-
-@router.get("/{participant_id}/final-report", response_model=FinalReportResponse)
-async def get_final_report(
-    participant_id: UUID,
-    activity_code: str = Query(..., description="Professional activity code"),
-    format: str = Query("json", description="Response format: 'json', 'html', or 'pdf'"),
-    scoring_result_id: UUID | None = Query(None, description="Specific scoring result ID (optional, uses latest if not provided)"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    """
-    Get final report for a participant.
-
-    Returns a complete final report including:
-    - Score percentage
-    - Strengths (3-5 items)
-    - Development areas (3-5 items)
-    - Recommendations
-    - Detailed metrics table
-    - Notes about confidence and algorithm version
-
-    Query parameters:
-    - activity_code: Professional activity code (required)
-    - format: 'json' (default), 'html', or 'pdf'
-
-    Returns:
-    - JSON: FinalReportResponse with all report data
-    - HTML: Rendered HTML report (if format=html)
-    - PDF: PDF document (if format=pdf)
-
-    Raises:
-    - 404: Participant or activity not found
-    - 400: No scoring result found (calculate score first)
-    """
-    scoring_service = ScoringService(db)
-
-    try:
-        report_data = await scoring_service.generate_final_report(
-            participant_id=participant_id,
-            prof_activity_code=activity_code,
-            scoring_result_id=scoring_result_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    if format == "html":
-        # Import here to avoid circular dependency and only when needed
-        from app.services.report_template import render_final_report_html
-
-        html_content = render_final_report_html(report_data)
-        return HTMLResponse(content=html_content)
-
-    if format == "pdf":
-        import logging
-
-        from app.services.pdf_generator import render_html_to_pdf
-        from app.services.report_template import render_final_report_html
-
-        logger = logging.getLogger(__name__)
-
-        try:
-            html_content = render_final_report_html(report_data)
-        except Exception as e:
-            logger.exception("Failed to render HTML for PDF report")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to render report template: {e}",
-            ) from e
-
-        try:
-            pdf_bytes = render_html_to_pdf(html_content)
-        except OSError as e:
-            # WeasyPrint library loading issues
-            logger.exception("WeasyPrint library error during PDF generation")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PDF generation unavailable: missing system libraries. Contact administrator.",
-            ) from e
-        except Exception as e:
-            logger.exception("Unexpected error during PDF generation")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"PDF generation failed: {e}",
-            ) from e
-
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="report_{participant_id}_{activity_code}.pdf"'
-            }
-        )
-
-    # Return JSON by default
-    return FinalReportResponse(**report_data)
-
-
-@router.get("/{participant_id}/scores", response_model=ScoringHistoryResponse)
-async def get_participant_scoring_history(
-    participant_id: UUID,
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of results to return"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-) -> ScoringHistoryResponse:
-    """
-    Get scoring history for a participant.
-
-    Returns list of scoring results ordered by computed_at DESC.
-
-    Query parameters:
-    - limit: Maximum number of results (default: 10, max: 100)
-
-    Returns:
-    - List of scoring results with activity info, scores, strengths, dev_areas
-    - Each result includes prof_activity_code for generating final reports
-
-    Raises:
-    - 404: Participant not found
-    """
-    participant_service = ParticipantService(db)
-    participant = await participant_service.get_participant(participant_id)
-    if not participant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
-
-    scoring_repo = ScoringResultRepository(db)
-    results = await scoring_repo.list_by_participant(participant_id, limit=limit)
-
-    history_items = []
-    for result in results:
-        prof_activity = result.weight_table.prof_activity
-
-        strengths = None
-        if result.strengths:
-            strengths = [MetricItem(**item) for item in result.strengths]
-
-        dev_areas = None
-        if result.dev_areas:
-            dev_areas = [MetricItem(**item) for item in result.dev_areas]
-
-        history_items.append(
-            ScoringHistoryItem(
-                id=result.id,
-                prof_activity_code=prof_activity.code,
-                prof_activity_name=prof_activity.name,
-                score_pct=float(result.score_pct),
-                strengths=strengths,
-                dev_areas=dev_areas,
-                created_at=result.computed_at,
-            )
-        )
-
-    return ScoringHistoryResponse(results=history_items, total=len(history_items))
 
 
 # Participant Metrics Endpoints

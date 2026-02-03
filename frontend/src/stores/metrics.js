@@ -54,9 +54,9 @@ export const useMetricsStore = defineStore('metrics', () => {
 
     try {
       const data = await metricsApi.listMetricDefs(activeOnly)
-      metricDefs.value = data
+      metricDefs.value = data.items || []
       lastFetched.value = Date.now()
-      return data
+      return metricDefs.value
     } catch (err) {
       const normalized = normalizeApiError(err, 'Ошибка загрузки метрик')
       error.value = normalized.message

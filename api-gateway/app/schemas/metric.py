@@ -108,7 +108,6 @@ class MetricUsageResponse(BaseModel):
     metric_id: UUID
     extracted_metrics_count: int = Field(..., description="Number of extracted metric values")
     participant_metrics_count: int = Field(0, description="Number of participant metric values")
-    scoring_results_count: int = Field(0, description="Number of scoring results affected")
     weight_tables_count: int = Field(..., description="Number of weight tables using this metric")
     reports_affected: int = Field(..., description="Number of unique reports with this metric")
 
