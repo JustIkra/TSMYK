@@ -431,35 +431,50 @@ onMounted(() => {
 
 <style scoped>
 .metric-generate-view {
-  padding: 20px;
-  max-width: 1200px;
+  max-width: var(--container-max-width);
   margin: 0 auto;
 }
 
+/* Header Card */
 .header-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.header-card :deep(.el-card__body) {
+  padding: var(--spacing-xl);
 }
 
 .header-content h1 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-sm) 0;
 }
 
 .header-content p {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
 }
 
+/* Cards */
 .upload-card,
 .progress-card,
 .pending-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.upload-card :deep(.el-card__body),
+.progress-card :deep(.el-card__body) {
+  padding: var(--spacing-xl);
 }
 
 .upload-card h3,
 .progress-card h3 {
-  margin: 0 0 16px 0;
-  font-size: 18px;
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .upload-area {
@@ -467,7 +482,7 @@ onMounted(() => {
 }
 
 .upload-actions {
-  margin-top: 16px;
+  margin-top: var(--spacing-xl);
   text-align: center;
 }
 
@@ -476,17 +491,20 @@ onMounted(() => {
 }
 
 .progress-step {
-  margin: 16px 0;
-  color: var(--el-text-color-secondary);
+  margin: var(--spacing-lg) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .progress-stats {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
   justify-content: center;
-  margin-top: 12px;
+  margin-top: var(--spacing-lg);
+  flex-wrap: wrap;
 }
 
+/* Pending Card Header */
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -495,42 +513,147 @@ onMounted(() => {
 
 .card-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
+/* Metric cells */
 .metric-name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   flex-wrap: wrap;
 }
 
 .metric-description {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-base);
 }
 
 .rationale {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 
 .rationale .quotes {
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
 }
 
 .rationale .quotes ul {
-  margin: 4px 0;
-  padding-left: 16px;
+  margin: var(--spacing-xs) 0;
+  padding-left: var(--spacing-lg);
 }
 
 .rationale .quotes li {
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
   font-style: italic;
+  line-height: var(--line-height-relaxed);
 }
 
 .load-more {
-  margin-top: 16px;
+  margin-top: var(--spacing-xl);
   text-align: center;
+}
+
+/* Upload area styling */
+:deep(.el-upload-dragger) {
+  border-radius: var(--border-radius-lg);
+  border: 2px dashed var(--color-border);
+  transition: var(--transition-base);
+  background-color: var(--color-bg-section);
+}
+
+:deep(.el-upload-dragger:hover) {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+}
+
+:deep(.el-upload-dragger .el-icon--upload) {
+  color: var(--color-primary);
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+}
+
+:deep(.el-upload__text) {
+  color: var(--color-text-regular);
+}
+
+:deep(.el-upload__tip) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* Progress bar styling */
+:deep(.el-progress-bar__outer) {
+  border-radius: var(--border-radius-base);
+  background-color: var(--color-bg-section);
+}
+
+:deep(.el-progress-bar__inner) {
+  border-radius: var(--border-radius-base);
+  background: var(--gradient-primary);
+}
+
+/* Table styling */
+:deep(.el-table) {
+  --el-table-border-color: var(--color-border-light);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: var(--color-bg-section);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--color-border-lighter);
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: var(--color-white-soft);
+}
+
+/* Result styling */
+:deep(.el-result) {
+  padding: var(--spacing-xl) 0;
+}
+
+:deep(.el-result__title) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+}
+
+:deep(.el-result__subtitle) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Alert styling */
+:deep(.el-alert) {
+  border-radius: var(--border-radius-base);
+  margin-top: var(--spacing-lg);
+}
+
+/* Empty state */
+:deep(.el-empty) {
+  padding: var(--spacing-2xl) 0;
+}
+
+:deep(.el-empty__description) {
+  color: var(--color-text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .progress-stats {
+    flex-direction: column;
+    align-items: center;
+  }
 }
 </style>

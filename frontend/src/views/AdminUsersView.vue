@@ -1,16 +1,22 @@
 <template>
   <app-layout>
     <div class="admin-users-view">
-      <el-card class="header-card">
-        <h1>Управление пользователями</h1>
-        <p>Одобрение новых пользователей, назначение админов и удаление учётных записей</p>
-      </el-card>
+      <header class="page-header">
+        <h1 class="page-title">
+          Управление пользователями
+        </h1>
+        <p class="page-subtitle">
+          Одобрение новых пользователей, назначение админов и удаление учётных записей
+        </p>
+      </header>
 
-      <el-card
+      <section
         v-loading="adminStore.loading"
-        class="users-card"
+        class="card section-card"
       >
-        <h3>Ожидают одобрения ({{ adminStore.pendingUsers.length }})</h3>
+        <h3 class="section-title">
+          Ожидают одобрения ({{ adminStore.pendingUsers.length }})
+        </h3>
 
         <el-empty
           v-if="adminStore.pendingUsers.length === 0"
@@ -20,21 +26,21 @@
         <el-table
           v-else
           :data="adminStore.pendingUsers"
-          stripe
+          class="users-table"
+          table-layout="fixed"
         >
           <el-table-column
             prop="email"
             label="Email"
-            min-width="250"
           />
           <el-table-column
             label="Статус"
             width="140"
           >
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.status)">
+              <span class="status-tag status-tag--pending">
                 {{ getStatusLabel(row.status) }}
-              </el-tag>
+              </span>
             </template>
           </el-table-column>
           <el-table-column
@@ -55,6 +61,7 @@
               <div class="actions-column">
                 <el-button
                   type="success"
+                  size="small"
                   @click="handleApprove(row)"
                 >
                   Одобрить
@@ -63,13 +70,15 @@
             </template>
           </el-table-column>
         </el-table>
-      </el-card>
+      </section>
 
-      <el-card
+      <section
         v-loading="adminStore.loading"
-        class="users-card"
+        class="card section-card"
       >
-        <h3>Все пользователи ({{ allUsers.length }})</h3>
+        <h3 class="section-title">
+          Все пользователи ({{ allUsers.length }})
+        </h3>
 
         <el-empty
           v-if="allUsers.length === 0"
@@ -79,21 +88,21 @@
         <el-table
           v-else
           :data="allUsers"
-          stripe
+          class="users-table"
+          table-layout="fixed"
         >
           <el-table-column
             prop="email"
             label="Email"
-            min-width="250"
           />
           <el-table-column
             label="Роль"
             width="150"
           >
             <template #default="{ row }">
-              <el-tag :type="getRoleTagType(row.role)">
+              <span :class="['status-tag', getRoleTagClass(row.role)]">
                 {{ getRoleLabel(row.role) }}
-              </el-tag>
+              </span>
             </template>
           </el-table-column>
           <el-table-column
@@ -101,9 +110,9 @@
             width="140"
           >
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.status)">
+              <span :class="['status-tag', getStatusTagClass(row.status)]">
                 {{ getStatusLabel(row.status) }}
-              </el-tag>
+              </span>
             </template>
           </el-table-column>
           <el-table-column
@@ -117,7 +126,7 @@
           </el-table-column>
           <el-table-column
             label="Действия"
-            width="160"
+            width="200"
             align="center"
           >
             <template #default="{ row }">
@@ -125,9 +134,9 @@
                 v-if="row.id === authStore.user?.id"
                 class="actions-column"
               >
-                <el-tag type="info">
+                <span class="status-tag status-tag--info">
                   Это вы
-                </el-tag>
+                </span>
               </div>
               <div
                 v-else
@@ -136,19 +145,21 @@
                 <el-button
                   v-if="row.role !== 'ADMIN'"
                   type="warning"
+                  size="small"
                   @click="handleMakeAdmin(row)"
                 >
                   В админы
                 </el-button>
                 <el-button
                   v-if="row.role === 'ADMIN'"
-                  type="info"
+                  size="small"
                   @click="handleRevokeAdmin(row)"
                 >
                   Снять админа
                 </el-button>
                 <el-button
                   type="danger"
+                  size="small"
                   @click="handleDelete(row)"
                 >
                   Удалить
@@ -157,7 +168,7 @@
             </template>
           </el-table-column>
         </el-table>
-      </el-card>
+      </section>
     </div>
   </app-layout>
 </template>
@@ -167,7 +178,24 @@ import { computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AppLayout from '@/components/AppLayout.vue'
 import { useAdminStore, useAuthStore } from '@/stores'
-import { getRoleLabel, getRoleTagType, getStatusLabel, getStatusTagType } from '@/utils/labels'
+import { getRoleLabel, getStatusLabel } from '@/utils/labels'
+
+const getRoleTagClass = (role) => {
+  const classMap = {
+    ADMIN: 'status-tag--primary',
+    USER: 'status-tag--info'
+  }
+  return classMap[role] || 'status-tag--info'
+}
+
+const getStatusTagClass = (status) => {
+  const classMap = {
+    ACTIVE: 'status-tag--success',
+    PENDING: 'status-tag--pending',
+    BLOCKED: 'status-tag--danger'
+  }
+  return classMap[status] || 'status-tag--info'
+}
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
@@ -241,44 +269,122 @@ onMounted(async () => {
 
 <style scoped>
 .admin-users-view {
-  max-width: 1200px;
+  max-width: var(--container-max-width);
   margin: 0 auto;
 }
 
-.header-card {
-  margin-bottom: 20px;
+/* Section card styling */
+.section-card {
+  margin-bottom: var(--spacing-2xl);
 }
 
-.header-card h1 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
-  color: var(--color-text-primary);
+.section-card .section-title {
+  margin: 0 0 var(--spacing-lg) 0;
 }
 
-.header-card p {
-  margin: 0;
-  color: var(--color-text-regular);
-}
-
-.users-card h3 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  color: var(--color-text-primary);
-}
-
-.users-card {
-  margin-bottom: 20px;
-}
-
+/* Actions column */
 .actions-column {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 0;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  justify-content: center;
+  padding: var(--spacing-xs) 0;
 }
 
 .actions-column .el-button {
-  width: 100%;
   margin: 0;
+}
+
+/* Status tags with muted colors */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--border-radius-sm);
+  line-height: 1.4;
+}
+
+.status-tag--success {
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.status-tag--pending {
+  background-color: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+.status-tag--danger {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.status-tag--info {
+  background-color: var(--color-info-light);
+  color: var(--color-info);
+}
+
+.status-tag--primary {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+/* Table styling */
+.users-table {
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+
+:deep(.el-table) {
+  --el-table-border-color: var(--color-border-light);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-lg);
+}
+
+:deep(.el-table::before) {
+  display: none;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: var(--color-gray-50);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--color-border-lighter);
+  color: var(--color-text-regular);
+}
+
+:deep(.el-table__body tr:hover > td.el-table__cell) {
+  background-color: var(--color-gray-50);
+}
+
+:deep(.el-table__body tr:last-child td.el-table__cell) {
+  border-bottom: none;
+}
+
+/* Empty state */
+:deep(.el-empty) {
+  padding: var(--spacing-3xl) var(--spacing-xl);
+}
+
+:deep(.el-empty__description) {
+  color: var(--color-text-secondary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .actions-column {
+    flex-direction: column;
+  }
+
+  .actions-column .el-button {
+    width: 100%;
+  }
 }
 </style>

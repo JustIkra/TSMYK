@@ -12,7 +12,8 @@ const locale = ref(ru)
 </script>
 
 <style>
-@import url('/assets/theme-tokens.css');
+@import url('./styles/theme-tokens.css');
+@import url('./styles/animations.css');
 
 * {
   margin: 0;
@@ -20,39 +21,99 @@ const locale = ref(ru)
   box-sizing: border-box;
 }
 
+html {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
 body {
   font-family: var(--font-family-base);
   background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
   min-height: 100vh;
 }
 
+/* Link styles */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-primary-lighter);
+  color: var(--color-text-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
+
+/* Actions group for table cells */
 .actions-group {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--spacing-sm, 8px);
-  width: 220px;
-  margin: 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
 }
 
 .actions-group .el-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  min-height: var(--button-height-default, 32px);
-  font-size: var(--font-size-base, 14px);
-  border-radius: var(--border-radius-base, 4px);
 }
 
 .actions-group .el-button :deep(.el-icon) {
-  margin-right: var(--spacing-sm, 8px);
+  margin-right: var(--spacing-xs);
 }
 
-.actions-group__danger {
-  align-self: stretch;
+/* Vertical actions group */
+.actions-group--vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Element Plus global overrides */
+.el-message-box {
+  border-radius: var(--border-radius-xl) !important;
+}
+
+.el-notification {
+  border-radius: var(--border-radius-lg) !important;
+}
+
+.el-loading-mask {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.el-empty__description {
+  color: var(--color-text-secondary);
 }
 </style>

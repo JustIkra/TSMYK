@@ -242,19 +242,44 @@ updateDisplayValue(props.modelValue)
 
 <style scoped>
 .is-invalid :deep(.el-input__wrapper) {
-  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+  box-shadow: 0 0 0 1px var(--color-danger) inset;
 }
 
 .error-message {
-  color: var(--el-color-danger);
-  font-size: 12px;
-  line-height: 1.4;
-  margin-top: 4px;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-base);
+  margin-top: var(--spacing-xs);
 }
 
 :deep(.el-input-group__append) {
   padding: 0;
-  background-color: var(--el-fill-color-blank);
+  background-color: var(--color-white);
+  border-color: var(--color-border);
+  border-radius: 0 var(--border-radius-base) var(--border-radius-base) 0;
+}
+
+:deep(.el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  transition: var(--transition-fast);
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-border-dark) inset;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px var(--color-focus-ring);
+}
+
+:deep(.el-input__inner) {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: var(--color-text-placeholder);
 }
 
 :deep(.el-button-group) {
@@ -264,7 +289,18 @@ updateDisplayValue(props.modelValue)
 :deep(.el-button-group .el-button) {
   margin: 0;
   border-radius: 0;
-  padding: 8px 12px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-white);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  transition: var(--transition-fast);
+  box-shadow: none;
+}
+
+:deep(.el-button-group .el-button:hover) {
+  background-color: var(--color-gray-50);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 :deep(.el-button-group .el-button:first-child) {
@@ -273,7 +309,20 @@ updateDisplayValue(props.modelValue)
 }
 
 :deep(.el-button-group .el-button:last-child) {
-  border-top-right-radius: var(--el-input-border-radius, var(--el-border-radius-base));
-  border-bottom-right-radius: var(--el-input-border-radius, var(--el-border-radius-base));
+  border-top-right-radius: var(--border-radius-base);
+  border-bottom-right-radius: var(--border-radius-base);
+}
+
+:deep(.el-button-group .el-button.is-disabled) {
+  background-color: var(--color-gray-100);
+  border-color: var(--color-border-light);
+  color: var(--color-text-placeholder);
+  cursor: not-allowed;
+}
+
+:deep(.el-button-group .el-button.is-disabled:hover) {
+  background-color: var(--color-gray-100);
+  border-color: var(--color-border-light);
+  color: var(--color-text-placeholder);
 }
 </style>

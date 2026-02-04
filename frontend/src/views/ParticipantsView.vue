@@ -1,9 +1,11 @@
 <template>
   <app-layout>
     <div class="participants-view">
-      <el-card class="header-card">
+      <div class="page-header">
         <div class="header-content">
-          <h1>Участники</h1>
+          <h1 class="page-title">
+            Участники
+          </h1>
           <el-button
             type="primary"
             @click="showCreateDialog = true"
@@ -12,9 +14,9 @@
             Добавить участника
           </el-button>
         </div>
-      </el-card>
+      </div>
 
-      <el-card class="search-card">
+      <div class="filter-card card">
         <el-form
           :inline="!isMobile"
           :model="searchForm"
@@ -42,22 +44,22 @@
             />
           </el-form-item>
         </el-form>
-      </el-card>
+      </div>
 
-      <el-card
+      <div
         v-loading="participantsStore.loading"
-        class="table-card"
+        class="table-card card"
       >
         <!-- Desktop Table View -->
         <el-table
           v-if="!isMobile"
           :data="participantsStore.participants"
           stripe
+          table-layout="fixed"
         >
           <el-table-column
             prop="full_name"
             label="ФИО"
-            min-width="200"
           />
           <el-table-column
             prop="birth_date"
@@ -71,8 +73,8 @@
           />
           <el-table-column
             label="Действия"
-            width="180"
-            fixed="right"
+            width="200"
+            align="center"
           >
             <template #default="{ row }">
               <div class="actions-group">
@@ -84,9 +86,9 @@
                   Открыть
                 </el-button>
                 <el-button
-                  class="actions-group__danger"
                   type="danger"
                   size="small"
+                  plain
                   @click="confirmDelete(row)"
                 >
                   Удалить
@@ -101,11 +103,10 @@
           v-else
           class="participants-cards"
         >
-          <el-card
+          <div
             v-for="participant in participantsStore.participants"
             :key="participant.id"
             class="participant-card"
-            shadow="hover"
           >
             <div class="participant-card__name">
               {{ participant.full_name }}
@@ -129,12 +130,13 @@
               </el-button>
               <el-button
                 type="danger"
+                plain
                 @click="confirmDelete(participant)"
               >
                 Удалить
               </el-button>
             </div>
-          </el-card>
+          </div>
 
           <el-empty
             v-if="!participantsStore.participants.length && !participantsStore.loading"
@@ -182,7 +184,7 @@
             @size-change="handleSearch"
           />
         </div>
-      </el-card>
+      </div>
 
       <!-- Диалог создания -->
       <el-dialog
@@ -341,12 +343,13 @@ onMounted(() => {
 
 <style scoped>
 .participants-view {
-  max-width: 1400px;
+  max-width: var(--container-max-width);
   margin: 0 auto;
 }
 
-.header-card {
-  margin-bottom: 20px;
+/* Page Header */
+.page-header {
+  margin-bottom: var(--spacing-xl);
 }
 
 .header-content {
@@ -355,41 +358,72 @@ onMounted(() => {
   align-items: center;
 }
 
-.header-content h1 {
-  margin: 0;
-  font-size: 24px;
+/* Filter Card */
+.filter-card {
+  margin-bottom: var(--spacing-xl);
+  background-color: var(--color-bg-section);
+}
+
+.filter-card :deep(.el-form-item__label) {
+  color: var(--color-text-regular);
+  font-weight: var(--font-weight-medium);
+}
+
+.filter-card :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+/* Table Card */
+.table-card {
+  background-color: var(--color-bg-card);
+}
+
+/* Table Styles - Calm colors */
+.table-card :deep(.el-table) {
+  --el-table-border-color: var(--color-border-light);
+  --el-table-header-bg-color: var(--color-gray-50);
+  --el-table-row-hover-bg-color: var(--color-gray-50);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+
+.table-card :deep(.el-table th.el-table__cell) {
+  background-color: var(--color-gray-50);
   color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
-.header-content .el-button {
-  min-height: 44px;
+.table-card :deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--color-border-lighter);
+  color: var(--color-text-regular);
 }
 
-.search-card {
-  margin-bottom: 20px;
+.table-card :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: var(--color-gray-50);
 }
 
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
+.table-card :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background-color: var(--color-bg-hover);
 }
 
+/* Actions Group */
 .actions-group {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
+  flex-direction: row;
+  gap: var(--spacing-sm);
+  align-items: center;
 }
 
 .actions-group .el-button {
-  width: 140px;
-  justify-content: center;
   margin: 0;
 }
 
-.actions-group__danger {
-  margin: 0;
+/* Pagination */
+.pagination {
+  margin-top: var(--spacing-xl);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .pagination--mobile {
@@ -400,25 +434,38 @@ onMounted(() => {
 .participants-cards {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-lg);
 }
 
 .participant-card {
   width: 100%;
+  background-color: var(--color-bg-card);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--color-border-light);
+  padding: var(--spacing-lg);
+  transition: var(--transition-base);
+}
+
+.participant-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border);
 }
 
 .participant-card__name {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-md);
 }
 
 .participant-card__info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .participant-card__field {
@@ -429,26 +476,50 @@ onMounted(() => {
 
 .field-label {
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 
 .field-value {
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .participant-card__actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: var(--spacing-sm);
 }
 
 .participant-card__actions .el-button {
-  width: 100%;
-  min-height: 44px;
+  flex: 1;
+  min-height: var(--button-height-default);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Dialog Styles */
+:deep(.el-dialog) {
+  border-radius: var(--border-radius-lg);
+}
+
+:deep(.el-dialog__header) {
+  border-bottom: 1px solid var(--color-border-light);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+:deep(.el-dialog__title) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+:deep(.el-dialog__body) {
+  padding: var(--spacing-xl);
+}
+
+:deep(.el-dialog__footer) {
+  border-top: 1px solid var(--color-border-light);
+  padding: var(--spacing-lg) var(--spacing-xl);
 }
 
 /* Responsive */
@@ -456,20 +527,37 @@ onMounted(() => {
   .header-content {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--spacing-md);
   }
 
-  .header-content h1 {
-    font-size: 20px;
+  .page-title {
+    font-size: var(--font-size-h2);
   }
 
-  .search-card :deep(.el-form-item) {
+  .filter-card,
+  .table-card {
+    padding: var(--spacing-lg);
+  }
+
+  .filter-card :deep(.el-form-item) {
     width: 100%;
     margin-right: 0;
-    margin-bottom: 12px;
+    margin-bottom: var(--spacing-md);
   }
 
-  .search-card :deep(.el-form-item__content) {
+  .filter-card :deep(.el-form-item:last-child) {
+    margin-bottom: 0;
+  }
+
+  .filter-card :deep(.el-form-item__content) {
+    width: 100%;
+  }
+
+  .participant-card__actions {
+    flex-direction: column;
+  }
+
+  .participant-card__actions .el-button {
     width: 100%;
   }
 }

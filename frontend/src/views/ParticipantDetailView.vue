@@ -532,35 +532,70 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ========================================
+   PAGE CONTAINER
+   ======================================== */
 .participant-detail {
-  max-width: 1400px;
+  max-width: var(--container-max-width);
   margin: 0 auto;
 }
 
+/* ========================================
+   CARDS - Modern rounded design with soft shadows
+   ======================================== */
 .detail-card,
 .section-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-xl);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--card-border-color);
+  border-radius: var(--card-border-radius);
+  box-shadow: var(--card-shadow);
+  transition: var(--transition-base);
 }
 
+.detail-card:hover,
+.section-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.detail-card :deep(.el-card__header),
+.section-card :deep(.el-card__header) {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border-light);
+  background-color: transparent;
+}
+
+.detail-card :deep(.el-card__body),
+.section-card :deep(.el-card__body) {
+  padding: var(--spacing-xl);
+}
+
+/* ========================================
+   PAGE HEADER
+   ======================================== */
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-lg);
 }
 
 .card-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--font-size-h1);
   color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
+/* ========================================
+   SECTION HEADER
+   ======================================== */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -569,14 +604,18 @@ onUnmounted(() => {
 
 .section-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-size-h2);
   color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
+/* ========================================
+   REPORTS ACTIONS
+   ======================================== */
 .reports-actions-group {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: var(--spacing-sm);
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -586,6 +625,30 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* ========================================
+   DESCRIPTIONS - Info table styling
+   ======================================== */
+:deep(.el-descriptions) {
+  --el-descriptions-item-bordered-label-background: var(--color-gray-50);
+}
+
+:deep(.el-descriptions__label) {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+:deep(.el-descriptions__content) {
+  color: var(--color-text-primary);
+}
+
+:deep(.el-descriptions__body) {
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+}
+
+/* ========================================
+   TABLE STYLING
+   ======================================== */
 .reports-table :deep(colgroup col) {
   width: 25% !important;
 }
@@ -594,48 +657,62 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* Batch upload styles */
+/* ========================================
+   BATCH UPLOAD
+   ======================================== */
 .batch-files-list {
-  margin-top: 20px;
+  margin-top: var(--spacing-xl);
   max-height: 300px;
   overflow-y: auto;
+  padding-right: var(--spacing-xs);
 }
 
 .batch-files-header {
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--el-text-color-primary);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .batch-file-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  background: var(--el-fill-color-light);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--border-radius-base);
+  margin-bottom: var(--spacing-sm);
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-border-lighter);
+  transition: var(--transition-fast);
+}
+
+.batch-file-item:hover {
+  background: var(--color-gray-100);
+  border-color: var(--color-border-light);
 }
 
 .batch-file-item--success {
-  background: var(--el-color-success-light-9);
+  background: var(--color-success-light);
+  border-color: var(--color-success);
 }
 
 .batch-file-item--error {
-  background: var(--el-color-danger-light-9);
+  background: var(--color-danger-light);
+  border-color: var(--color-danger);
 }
 
 .batch-file-icon {
   font-size: 20px;
   flex-shrink: 0;
+  color: var(--color-gray-500);
 }
 
 .batch-file-icon--success {
-  color: var(--el-color-success);
+  color: var(--color-success);
 }
 
 .batch-file-icon--error {
-  color: var(--el-color-danger);
+  color: var(--color-danger);
 }
 
 .batch-file-info {
@@ -643,33 +720,156 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: var(--spacing-xs);
 }
 
 .batch-file-name {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .batch-file-size {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .batch-file-error {
-  font-size: 12px;
-  color: var(--el-color-danger);
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  font-weight: var(--font-weight-medium);
 }
 
+/* ========================================
+   DIALOG STYLING - Modern rounded corners
+   ======================================== */
+:deep(.el-dialog) {
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-xl);
+}
+
+:deep(.el-dialog__header) {
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+:deep(.el-dialog__title) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+}
+
+:deep(.el-dialog__body) {
+  padding: var(--spacing-xl);
+}
+
+:deep(.el-dialog__footer) {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* ========================================
+   UPLOAD STYLING
+   ======================================== */
+:deep(.el-upload-dragger) {
+  border-radius: var(--border-radius-lg);
+  border: 2px dashed var(--color-border);
+  transition: var(--transition-fast);
+  padding: var(--spacing-2xl) var(--spacing-xl);
+}
+
+:deep(.el-upload-dragger:hover) {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+}
+
+:deep(.el-upload__text) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+}
+
+:deep(.el-upload__text em) {
+  color: var(--color-primary);
+  font-style: normal;
+  font-weight: var(--font-weight-medium);
+}
+
+:deep(.el-upload__tip) {
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+:deep(.el-icon--upload) {
+  font-size: 48px;
+  color: var(--color-gray-400);
+  margin-bottom: var(--spacing-md);
+}
+
+/* ========================================
+   BUTTON STYLING - Non pill-shaped
+   ======================================== */
+:deep(.el-button) {
+  border-radius: var(--button-border-radius);
+}
+
+/* ========================================
+   TABS - Modern appearance
+   ======================================== */
+:deep(.el-tabs__header) {
+  margin-bottom: var(--spacing-lg);
+}
+
+:deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: var(--color-border-light);
+}
+
+:deep(.el-tabs__item) {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  padding: 0 var(--spacing-lg);
+  height: 44px;
+  line-height: 44px;
+  transition: var(--transition-fast);
+}
+
+:deep(.el-tabs__item:hover) {
+  color: var(--color-primary);
+}
+
+:deep(.el-tabs__item.is-active) {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+:deep(.el-tabs__active-bar) {
+  background-color: var(--color-primary);
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* ========================================
+   RESPONSIVE - Mobile
+   ======================================== */
 @media (max-width: 768px) {
+  .detail-card :deep(.el-card__header),
+  .detail-card :deep(.el-card__body),
+  .section-card :deep(.el-card__header),
+  .section-card :deep(.el-card__body) {
+    padding: var(--spacing-lg);
+  }
+
   .card-header {
     flex-direction: column;
     align-items: stretch;
   }
 
   .card-header h2 {
-    font-size: 20px;
+    font-size: var(--font-size-h2);
   }
 
   .header-actions {
@@ -677,29 +877,32 @@ onUnmounted(() => {
   }
 
   .header-actions .el-button {
-    min-height: 44px;
+    min-height: var(--button-height-large);
     width: 100%;
   }
 
   .section-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: var(--spacing-md);
   }
 
   .section-header .el-button {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--button-height-large);
   }
 }
 
+/* ========================================
+   RESPONSIVE - Small Mobile
+   ======================================== */
 @media (max-width: 375px) {
   .card-header h2 {
-    font-size: 18px;
+    font-size: var(--font-size-lg);
   }
 
   .section-header h3 {
-    font-size: 16px;
+    font-size: var(--font-size-lg);
   }
 }
 </style>

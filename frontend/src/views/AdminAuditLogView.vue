@@ -73,6 +73,7 @@
           :data="auditLogs"
           stripe
           style="width: 100%"
+          table-layout="fixed"
         >
           <el-table-column
             label="Дата и время"
@@ -119,7 +120,6 @@
 
           <el-table-column
             label="Коды метрик"
-            min-width="250"
           >
             <template #default="{ row }">
               <div class="metric-codes">
@@ -367,73 +367,205 @@ onMounted(async () => {
 
 <style scoped>
 .audit-log-view {
-  max-width: 1400px;
+  max-width: var(--container-max-width);
   margin: 0 auto;
-  padding: 20px;
 }
 
+/* Header Card */
 .header-card {
-  margin-bottom: 24px;
-  border-radius: 12px;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.header-card :deep(.el-card__body) {
+  padding: var(--spacing-xl);
 }
 
 .header-content h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 600;
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-sm) 0;
 }
 
 .header-content p {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
 }
 
+/* Filters Card */
 .filters-card {
-  margin-bottom: 24px;
-  border-radius: 12px;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.filters-card :deep(.el-card__body) {
+  padding: var(--spacing-lg) var(--spacing-xl);
 }
 
 .filters-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-lg);
+  align-items: flex-end;
 }
 
+.filters-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+/* Table Card */
 .table-card {
-  border-radius: 12px;
+  /* Uses default el-card styling from theme-tokens */
 }
 
+.table-card :deep(.el-card__body) {
+  padding: var(--spacing-xl);
+}
+
+/* User info */
 .user-name {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .user-email {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: 2px;
 }
 
 .text-muted {
-  color: var(--el-text-color-placeholder);
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-sm);
 }
 
+/* Metric codes */
 .metric-codes {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .metric-code-tag {
-  font-family: monospace;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  font-size: var(--font-size-xs);
 }
 
+/* Affected counts */
 .affected-counts {
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-regular);
 }
 
+.affected-counts div {
+  margin-bottom: 2px;
+}
+
+.affected-counts div:last-child {
+  margin-bottom: 0;
+}
+
+/* Pagination */
 .pagination-wrapper {
-  margin-top: 20px;
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-lighter);
   display: flex;
   justify-content: flex-end;
+}
+
+/* Table styling */
+:deep(.el-table) {
+  --el-table-border-color: var(--color-border-light);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: var(--color-bg-section);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--color-border-lighter);
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: var(--color-white-soft);
+}
+
+/* Form styling */
+:deep(.el-form-item__label) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
+
+/* Empty state */
+:deep(.el-empty) {
+  padding: var(--spacing-2xl) 0;
+}
+
+:deep(.el-empty__description) {
+  color: var(--color-text-secondary);
+}
+
+/* Date picker styling */
+:deep(.el-date-editor) {
+  --el-date-editor-width: auto;
+}
+
+:deep(.el-date-editor .el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+}
+
+/* Select styling */
+:deep(.el-select .el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+}
+
+/* Pagination styling */
+:deep(.el-pagination) {
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-sm);
+}
+
+:deep(.el-pagination .el-pager li) {
+  border-radius: var(--border-radius-sm);
+}
+
+:deep(.el-pagination .el-pager li.is-active) {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+:deep(.el-pagination .btn-prev),
+:deep(.el-pagination .btn-next) {
+  border-radius: var(--border-radius-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .filters-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-form :deep(.el-form-item) {
+    width: 100%;
+  }
+
+  .filters-form :deep(.el-select),
+  .filters-form :deep(.el-date-editor) {
+    width: 100% !important;
+  }
+
+  .pagination-wrapper {
+    justify-content: center;
+  }
 }
 </style>

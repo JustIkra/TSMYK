@@ -211,25 +211,99 @@ watch(() => props.modelValue, async (isOpen) => {
 .drawer-actions {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 16px;
-  padding: 0 20px;
+  margin-bottom: var(--spacing-lg);
+  padding: 0 var(--spacing-lg);
+}
+
+:deep(.el-drawer) {
+  --el-drawer-bg-color: var(--color-white);
 }
 
 :deep(.el-drawer__header) {
-  margin-bottom: 20px;
-  padding: 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-bottom: 0;
+  padding: var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+:deep(.el-drawer__title) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
 }
 
 :deep(.el-drawer__body) {
-  padding: 20px;
+  padding: var(--spacing-xl);
+  background-color: var(--color-white);
 }
 
 :deep(.el-table) {
-  font-size: 14px;
+  font-size: var(--font-size-base);
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  --el-table-border-color: var(--color-border-light);
+  --el-table-header-bg-color: var(--color-gray-50);
+  --el-table-row-hover-bg-color: var(--color-bg-hover);
+}
+
+:deep(.el-table th) {
+  background-color: var(--color-gray-50);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+:deep(.el-table td) {
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
 }
 
 :deep(.el-table .el-tag) {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--border-radius-sm);
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background-color: var(--color-white-soft);
+}
+
+/* Empty state styling */
+:deep(.el-empty) {
+  padding: var(--spacing-3xl);
+}
+
+:deep(.el-empty__description) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+/* Confidence color classes */
+.confidence-high {
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+.confidence-medium {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-medium);
+}
+
+.confidence-low {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .drawer-actions {
+    padding: 0;
+  }
+
+  :deep(.el-drawer__body) {
+    padding: var(--spacing-lg);
+  }
 }
 </style>

@@ -1,12 +1,54 @@
 <template>
   <div class="register-container">
-    <el-card class="register-card">
-      <template #header>
-        <div class="card-header">
-          <h2>Регистрация</h2>
-          <p>Создайте аккаунт для работы с системой</p>
+    <el-card
+      class="register-card"
+      shadow="never"
+    >
+      <div class="card-header">
+        <div class="logo-icon">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient
+                id="logoGradientReg"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop
+                  offset="0%"
+                  style="stop-color:#4F6AF0"
+                />
+                <stop
+                  offset="100%"
+                  style="stop-color:#3D56D4"
+                />
+              </linearGradient>
+            </defs>
+            <rect
+              width="48"
+              height="48"
+              rx="12"
+              fill="url(#logoGradientReg)"
+            />
+            <path
+              d="M16 24L22 30L32 18"
+              stroke="white"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </div>
-      </template>
+        <h2>Регистрация</h2>
+        <p>Создайте аккаунт для работы с системой</p>
+      </div>
 
       <el-form
         ref="formRef"
@@ -245,43 +287,108 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-bg-overlay) 100%);
-  padding: 20px;
+  background: var(--gradient-hero);
+  padding: var(--spacing-xl);
 }
 
 .register-card {
   width: 100%;
   max-width: 450px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+  background-color: var(--color-bg-card);
+}
+
+.register-card :deep(.el-card__body) {
+  padding: var(--spacing-3xl);
 }
 
 .card-header {
   text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.logo-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
 }
 
 .card-header h2 {
-  margin: 0 0 8px 0;
-  color: var(--color-primary);
-  font-size: 24px;
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-semibold);
 }
 
 .card-header p {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: var(--font-size-base);
+}
+
+/* Input styling */
+.register-card :deep(.el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+  box-shadow: 0 0 0 1px var(--color-border-light) inset;
+  transition: var(--transition-fast);
+}
+
+.register-card :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+}
+
+.register-card :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px var(--color-focus-ring);
+}
+
+/* Button styling - non-pill shape */
+.register-card :deep(.el-button) {
+  border-radius: var(--border-radius-base);
+  font-weight: var(--font-weight-medium);
+  transition: var(--transition-button);
+}
+
+.register-card :deep(.el-button--primary) {
+  background: var(--gradient-primary);
+  border-color: var(--color-primary);
+}
+
+.register-card :deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary-darker) 100%);
+  border-color: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.register-card :deep(.el-button--primary:active) {
+  transform: translateY(0);
+}
+
+/* Form label styling */
+.register-card :deep(.el-form-item__label) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 .login-link {
   text-align: center;
   color: var(--color-text-secondary);
+  margin-top: var(--spacing-lg);
+  font-size: var(--font-size-base);
 }
 
 .login-link a {
   color: var(--color-primary);
   text-decoration: none;
-  margin-left: 5px;
+  margin-left: var(--spacing-xs);
+  font-weight: var(--font-weight-medium);
+  transition: var(--transition-fast);
 }
 
 .login-link a:hover {
+  color: var(--color-primary-dark);
   text-decoration: underline;
 }
 </style>

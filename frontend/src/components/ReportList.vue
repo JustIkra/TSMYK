@@ -489,33 +489,55 @@ const handleAction = async ({ action, report }) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  gap: 16px;
+  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-lg);
   flex-wrap: wrap;
 }
 
 .controls-left,
 .controls-right {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-md);
   align-items: center;
 }
 
 /* Table Styles */
 .report-list__table {
   width: 100%;
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+:deep(.el-table) {
+  --el-table-border-color: var(--color-border-light);
+  --el-table-header-bg-color: var(--color-gray-50);
+  --el-table-row-hover-bg-color: var(--color-bg-hover);
+  border-radius: var(--border-radius-base);
+}
+
+:deep(.el-table th) {
+  background-color: var(--color-gray-50);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+:deep(.el-table td) {
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
 }
 
 .filename {
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   word-break: break-word;
 }
 
 .status-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .status-icon {
@@ -524,6 +546,7 @@ const handleAction = async ({ action, report }) => {
 
 .status-icon--spinning {
   animation: rotate 1s linear infinite;
+  color: var(--color-warning);
 }
 
 .status-icon--success {
@@ -551,11 +574,38 @@ const handleAction = async ({ action, report }) => {
 .report-list__cards {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-lg);
 }
 
 .report-card {
   width: 100%;
+  border-radius: var(--border-radius-base);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-fast);
+}
+
+.report-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border);
+}
+
+:deep(.report-card .el-card__header) {
+  background-color: var(--color-gray-50);
+  border-bottom: 1px solid var(--color-border-light);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--border-radius-base) var(--border-radius-base) 0 0;
+}
+
+:deep(.report-card .el-card__body) {
+  padding: var(--spacing-lg);
+}
+
+:deep(.report-card .el-card__footer) {
+  background-color: var(--color-white);
+  border-top: 1px solid var(--color-border-light);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: 0 0 var(--border-radius-base) var(--border-radius-base);
 }
 
 .report-card__header {
@@ -567,29 +617,29 @@ const handleAction = async ({ action, report }) => {
 .report-card__status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .report-card__body {
-  padding: 12px 0;
+  padding: var(--spacing-md) 0;
 }
 
 .report-card__field {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
-  gap: 12px;
+  margin-bottom: var(--spacing-sm);
+  gap: var(--spacing-md);
 }
 
 .field-label {
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   flex-shrink: 0;
 }
 
 .field-value {
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-align: right;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -607,13 +657,34 @@ const handleAction = async ({ action, report }) => {
 .report-card__actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .report-card__actions .el-button {
   width: 100%;
   min-height: 44px;
   margin: 0;
+  border-radius: var(--border-radius-base);
+}
+
+/* Dropdown styling */
+:deep(.el-dropdown-menu) {
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border-light);
+  padding: var(--spacing-xs);
+}
+
+:deep(.el-dropdown-menu__item) {
+  color: var(--color-text-regular);
+  transition: var(--transition-fast);
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+:deep(.el-dropdown-menu__item:hover) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
 }
 
 /* Dropdown danger item */
@@ -623,6 +694,38 @@ const handleAction = async ({ action, report }) => {
 
 :deep(.dropdown-item--danger:hover) {
   background-color: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+/* Select styling */
+:deep(.el-select .el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  transition: var(--transition-fast);
+}
+
+:deep(.el-select .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-border-dark) inset;
+}
+
+:deep(.el-select .el-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px var(--color-focus-ring);
+}
+
+/* Tag styling */
+:deep(.el-tag) {
+  border-radius: var(--border-radius-sm);
+}
+
+/* Empty state styling */
+:deep(.el-empty) {
+  padding: var(--spacing-3xl);
+}
+
+:deep(.el-empty__description) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
 }
 
 /* Responsive */
@@ -651,7 +754,7 @@ const handleAction = async ({ action, report }) => {
   .report-card__field {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--spacing-xs);
   }
 
   .field-value {

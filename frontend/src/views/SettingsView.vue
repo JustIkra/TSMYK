@@ -1,13 +1,24 @@
 <template>
   <AppLayout>
     <div class="settings-container">
-      <el-card class="settings-card">
-        <template #header>
-          <div class="card-header">
-            <h2>Настройки</h2>
-            <p>Смена пароля</p>
-          </div>
-        </template>
+      <div class="page-header">
+        <h1 class="page-title">
+          Настройки
+        </h1>
+        <p class="page-subtitle">
+          Управление учетной записью
+        </p>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-header">
+          <h2 class="card-title">
+            Смена пароля
+          </h2>
+          <p class="card-subtitle">
+            Обновите пароль для вашей учетной записи
+          </p>
+        </div>
 
         <el-form
           ref="formRef"
@@ -59,7 +70,7 @@
             />
           </el-form-item>
 
-          <el-form-item>
+          <el-form-item class="form-actions">
             <el-button
               type="primary"
               size="large"
@@ -70,7 +81,7 @@
             </el-button>
           </el-form-item>
         </el-form>
-      </el-card>
+      </div>
     </div>
   </AppLayout>
 </template>
@@ -155,25 +166,58 @@ const handleChangePassword = async () => {
 .settings-container {
   max-width: 600px;
   margin: 0 auto;
+  padding: var(--spacing-xl);
 }
 
+/* Card styling - uses .card from theme-tokens.css */
 .settings-card {
-  box-shadow: var(--shadow-md);
+  margin-top: var(--spacing-lg);
 }
 
-.card-header {
-  text-align: center;
+/* Form item spacing */
+:deep(.el-form-item) {
+  margin-bottom: var(--spacing-xl);
 }
 
-.card-header h2 {
-  margin: 0 0 8px 0;
-  color: var(--color-primary);
-  font-size: 24px;
+:deep(.el-form-item__label) {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  padding-bottom: var(--spacing-xs);
 }
 
-.card-header p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 14px;
+/* Input styling */
+:deep(.el-input__wrapper) {
+  border-radius: var(--border-radius-base);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+  transition: var(--transition-fast);
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-gray-400) inset;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px var(--color-focus-ring);
+}
+
+/* Button styling - standard rounded corners, not pill-shaped */
+.form-actions {
+  margin-top: var(--spacing-2xl);
+  margin-bottom: 0;
+}
+
+.form-actions :deep(.el-button) {
+  border-radius: var(--border-radius-base);
+  min-width: 160px;
+}
+
+@media (max-width: 768px) {
+  .settings-container {
+    padding: var(--spacing-lg);
+  }
+
+  .form-actions :deep(.el-button) {
+    width: 100%;
+  }
 }
 </style>
