@@ -44,7 +44,13 @@ class WeightTableService:
             raise ValueError(f"Professional activity '{payload.prof_activity_code}' not found")
 
         weights_payload = [
-            {"metric_code": item.metric_code, "weight": str(item.weight)}
+            {
+                "metric_code": item.metric_code,
+                "weight": str(item.weight),
+                "is_critical": item.is_critical,
+                "penalty": str(item.penalty),
+                "threshold": str(item.threshold),
+            }
             for item in payload.weights
         ]
 
@@ -107,7 +113,13 @@ class WeightTableService:
             raise ValueError("Cannot change professional activity of existing weight table")
 
         weights_payload = [
-            {"metric_code": item.metric_code, "weight": str(item.weight)}
+            {
+                "metric_code": item.metric_code,
+                "weight": str(item.weight),
+                "is_critical": item.is_critical,
+                "penalty": str(item.penalty),
+                "threshold": str(item.threshold),
+            }
             for item in payload.weights
         ]
 
@@ -134,6 +146,9 @@ class WeightTableService:
             WeightItemResponse(
                 metric_code=entry["metric_code"],
                 weight=Decimal(str(entry["weight"])),
+                is_critical=entry.get("is_critical", False),
+                penalty=Decimal(str(entry.get("penalty", "0"))),
+                threshold=Decimal(str(entry.get("threshold", "6.0"))),
             )
             for entry in weight_table.weights
         ]

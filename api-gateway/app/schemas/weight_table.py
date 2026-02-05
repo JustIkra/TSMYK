@@ -24,6 +24,22 @@ class WeightItem(BaseModel):
         le=Decimal("1"),
         description="Weight share for the metric (0 < weight <= 1)",
     )
+    is_critical: bool = Field(
+        default=False,
+        description="Whether this is a critical competency that can incur penalties",
+    )
+    penalty: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        lt=Decimal("1"),
+        description="Penalty multiplier if critical metric is below threshold (0 <= penalty < 1)",
+    )
+    threshold: Decimal = Field(
+        default=Decimal("6.0"),
+        ge=Decimal("1"),
+        le=Decimal("10"),
+        description="Threshold value below which penalty is applied (default 6.0)",
+    )
 
 
 class WeightTableUploadRequest(BaseModel):
@@ -62,6 +78,9 @@ class WeightItemResponse(BaseModel):
 
     metric_code: str
     weight: Decimal
+    is_critical: bool = False
+    penalty: Decimal = Decimal("0")
+    threshold: Decimal = Decimal("6.0")
 
 
 class WeightTableResponse(BaseModel):

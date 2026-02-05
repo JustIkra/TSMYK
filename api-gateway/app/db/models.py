@@ -677,3 +677,80 @@ class MetricEmbedding(Base):
 
     def __repr__(self) -> str:
         return f"<MetricEmbedding(id={self.id}, metric_def_id={self.metric_def_id}, model={self.model})>"
+
+
+# ScoringResult Table
+class ScoringResult(Base):
+    """
+    Scoring result for a participant against a weight table.
+
+    Stores calculated scores with penalty breakdown:
+    - base_score: weighted average of participant metrics
+    - penalty_multiplier: product of (1 - penalty_i) for critical metrics below threshold
+    - final_score: base_score * penalty_multiplier
+
+    Formula:
+    1. BaseScore = Σ(w_i × x_i) / Σ(w_i)
+    2. PenaltyMultiplier = Π(1 - penalty_i) for critical metrics where x_i < threshold_i
+    3. FinalScore = BaseScore × PenaltyMultiplier
+    """
+
+    __tablename__ = "scoring_result"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("participant.id", ondelete="CASCADE"), nullable=False
+    )
+    weight_table_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("weight_table.id", ondelete="CASCADE"), nullable=False
+    )
+    base_score: Mapped[float] = mapped_column(
+        sa.Numeric(5, 2), nullable=False, comment="Weighted average before penalties (0-10)"
+    )
+    penalty_multiplier: Mapped[float] = mapped_column(
+        sa.Numeric(5, 4), nullable=False, default=1.0, comment="Product of (1-penalty) factors"
+    )
+    final_score: Mapped[float] = mapped_column(
+        sa.Numeric(5, 2), nullable=False, comment="base_score * penalty_multiplier (0-10)"
+    )
+    penalties_applied: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB, nullable=True, comment="Array of {metric_code, value, threshold, penalty}"
+    )
+    metrics_used: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB, nullable=True, comment="Array of {metric_code, value, weight} used in calculation"
+    )
+    computed_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # Relationships
+    participant: Mapped["Participant"] = relationship("Participant")
+    weight_table: Mapped["WeightTable"] = relationship("WeightTable")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "participant_id",
+            "weight_table_id",
+            name="uq_scoring_result_participant_weight_table",
+        ),
+        CheckConstraint(
+            "base_score >= 0 AND base_score <= 10",
+            name="scoring_result_base_score_check",
+        ),
+        CheckConstraint(
+            "penalty_multiplier >= 0 AND penalty_multiplier <= 1",
+            name="scoring_result_penalty_multiplier_check",
+        ),
+        CheckConstraint(
+            "final_score >= 0 AND final_score <= 10",
+            name="scoring_result_final_score_check",
+        ),
+        Index("ix_scoring_result_participant_id", "participant_id"),
+        Index("ix_scoring_result_weight_table_id", "weight_table_id"),
+        Index("ix_scoring_result_computed_at", "computed_at"),
+        Index("ix_scoring_result_final_score", "final_score"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScoringResult(id={self.id}, participant_id={self.participant_id}, final_score={self.final_score})>"

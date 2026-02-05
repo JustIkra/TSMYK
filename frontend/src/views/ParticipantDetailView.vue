@@ -73,6 +73,121 @@
         />
       </el-card>
 
+      <!-- Scoring Section -->
+      <el-card class="section-card">
+        <template #header>
+          <div class="section-header">
+            <h3>Скоринг по моделям компетенций</h3>
+            <el-button
+              type="primary"
+              :loading="recalculatingScoring"
+              @click="recalculateScoring"
+            >
+              <el-icon><Refresh /></el-icon>
+              Пересчитать
+            </el-button>
+          </div>
+        </template>
+
+        <div
+          v-loading="loadingScoring"
+          class="scoring-content"
+        >
+          <el-empty
+            v-if="!loadingScoring && scoringResults.length === 0"
+            description="Скоринг ещё не рассчитан. Нажмите «Пересчитать» для расчёта."
+          />
+
+          <div
+            v-else
+            class="scoring-cards"
+          >
+            <el-card
+              v-for="result in scoringResults"
+              :key="result.id"
+              class="scoring-result-card"
+              shadow="hover"
+            >
+              <template #header>
+                <div class="scoring-card-header">
+                  <span class="scoring-model-name">{{ result.prof_activity_name }}</span>
+                  <el-tag
+                    :type="getScoreTagType(result.final_score)"
+                    size="large"
+                    class="scoring-final-tag"
+                  >
+                    {{ parseFloat(result.final_score).toFixed(1) }}
+                  </el-tag>
+                </div>
+              </template>
+
+              <div class="scoring-details">
+                <div class="scoring-row">
+                  <span class="scoring-label">Базовый балл:</span>
+                  <span class="scoring-value">{{ parseFloat(result.base_score).toFixed(2) }}</span>
+                </div>
+                <div class="scoring-row">
+                  <span class="scoring-label">Множитель штрафов:</span>
+                  <span
+                    class="scoring-value"
+                    :class="{ 'scoring-value--penalty': parseFloat(result.penalty_multiplier) < 1 }"
+                  >
+                    × {{ parseFloat(result.penalty_multiplier).toFixed(2) }}
+                  </span>
+                </div>
+
+                <el-divider
+                  v-if="result.penalties_applied && result.penalties_applied.length > 0"
+                />
+
+                <div
+                  v-if="result.penalties_applied && result.penalties_applied.length > 0"
+                  class="scoring-penalties"
+                >
+                  <div class="penalties-header">
+                    <el-icon color="var(--el-color-warning)"><Warning /></el-icon>
+                    <span>Применённые штрафы:</span>
+                  </div>
+                  <div
+                    v-for="(penalty, idx) in result.penalties_applied"
+                    :key="idx"
+                    class="penalty-item"
+                  >
+                    <span class="penalty-metric">{{ penalty.metric_code }}</span>
+                    <span class="penalty-info">
+                      {{ parseFloat(penalty.value).toFixed(1) }} &lt; {{ parseFloat(penalty.threshold).toFixed(1) }}
+                    </span>
+                    <el-tag
+                      type="danger"
+                      size="small"
+                    >
+                      -{{ (parseFloat(penalty.penalty) * 100).toFixed(0) }}%
+                    </el-tag>
+                  </div>
+                </div>
+
+                <el-text
+                  v-else
+                  type="success"
+                  size="small"
+                >
+                  Штрафы не применены
+                </el-text>
+              </div>
+
+              <div class="scoring-footer">
+                <el-text
+                  type="info"
+                  size="small"
+                >
+                  Рассчитано: {{ formatDate(result.computed_at) }}
+                </el-text>
+              </div>
+            </el-card>
+          </div>
+        </div>
+      </el-card>
+
       <!-- Upload Dialog -->
       <el-dialog
         v-model="showUploadDialog"
@@ -85,7 +200,7 @@
           ref="uploadRef"
           :auto-upload="false"
           multiple
-          accept=".docx"
+          accept=".docx,.pdf"
           :on-change="handleBatchFileChange"
           :show-file-list="false"
           drag
@@ -98,7 +213,7 @@
           </div>
           <template #tip>
             <div class="el-upload__tip">
-              Только .docx файлы, макс. 20 МБ, до 10 файлов
+              .docx и .pdf файлы, макс. 20 МБ, до 10 файлов
             </div>
           </template>
         </el-upload>
@@ -215,7 +330,9 @@ import {
   Document,
   Loading,
   CircleCheck,
-  CircleClose
+  CircleClose,
+  Refresh,
+  Warning
 } from '@element-plus/icons-vue'
 import AppLayout from '@/components/AppLayout.vue'
 import MetricsEditor from '@/components/MetricsEditor.vue'
@@ -223,6 +340,7 @@ import ReportList from '@/components/ReportList.vue'
 import ParticipantMetricsDrawer from '@/components/ParticipantMetricsDrawer.vue'
 import { useParticipantsStore, useMetricsStore } from '@/stores'
 import { reportsApi, participantsApi } from '@/api'
+import { scoringApi } from '@/api/scoring'
 import { formatDate } from '@/utils/dateFormat'
 import { useResponsive } from '@/composables/useResponsive'
 
@@ -233,6 +351,9 @@ const metricsStore = useMetricsStore()
 
 const loading = ref(false)
 const loadingReports = ref(false)
+const loadingScoring = ref(false)
+const recalculatingScoring = ref(false)
+const scoringResults = ref([])
 
 // Mobile responsiveness
 const { isMobile } = useResponsive()
@@ -324,10 +445,13 @@ const formatFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+const ALLOWED_EXTENSIONS = ['.docx', '.pdf']
+
 const validateFile = (file) => {
   // Check extension
-  if (!file.name.toLowerCase().endsWith('.docx')) {
-    return 'Только файлы формата .docx'
+  const fileName = file.name.toLowerCase()
+  if (!ALLOWED_EXTENSIONS.some(ext => fileName.endsWith(ext))) {
+    return 'Только файлы формата .docx и .pdf'
   }
   // Check size
   if (file.size > MAX_FILE_SIZE) {
@@ -439,10 +563,25 @@ const resetBatchUpload = () => {
 const downloadReport = async (reportId) => {
   try {
     const response = await reportsApi.download(reportId)
+    // Extract filename from Content-Disposition header or use default
+    const contentDisposition = response.headers?.['content-disposition']
+    let filename = `report_${reportId}`
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '')
+      }
+    }
+    // Fallback: determine extension from content-type
+    if (!filename.includes('.')) {
+      const contentType = response.headers?.['content-type'] || ''
+      const ext = contentType.includes('pdf') ? '.pdf' : '.docx'
+      filename += ext
+    }
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `report_${reportId}.docx`)
+    link.setAttribute('download', filename)
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -517,12 +656,49 @@ const handleDeleteReport = async (reportId) => {
   }
 }
 
+// Scoring functions
+const loadScoring = async () => {
+  loadingScoring.value = true
+  try {
+    const data = await scoringApi.getParticipantScores(route.params.id)
+    scoringResults.value = data.results || []
+  } catch (error) {
+    console.error('Error loading scoring:', error)
+    // Don't show error message - scoring might not exist yet
+    scoringResults.value = []
+  } finally {
+    loadingScoring.value = false
+  }
+}
+
+const recalculateScoring = async () => {
+  recalculatingScoring.value = true
+  try {
+    const results = await scoringApi.recalculateParticipant(route.params.id)
+    scoringResults.value = results
+    ElMessage.success(`Скоринг рассчитан для ${results.length} моделей`)
+  } catch (error) {
+    console.error('Error recalculating scoring:', error)
+    ElMessage.error(error.response?.data?.detail || 'Ошибка расчёта скоринга')
+  } finally {
+    recalculatingScoring.value = false
+  }
+}
+
+const getScoreTagType = (score) => {
+  const value = parseFloat(score)
+  if (value >= 7) return 'success'
+  if (value >= 5) return 'warning'
+  return 'danger'
+}
+
 onMounted(async () => {
   // Parallel loading of independent data sources (eliminates waterfall)
   await Promise.all([
     loadParticipant(),
     loadReports(),
-    loadMetricDefs()
+    loadMetricDefs(),
+    loadScoring()
   ])
 })
 
@@ -903,6 +1079,129 @@ onUnmounted(() => {
 
   .section-header h3 {
     font-size: var(--font-size-lg);
+  }
+}
+
+/* ========================================
+   SCORING SECTION
+   ======================================== */
+.scoring-content {
+  min-height: 100px;
+}
+
+.scoring-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.scoring-result-card {
+  border-radius: var(--border-radius-lg);
+  transition: var(--transition-base);
+}
+
+.scoring-result-card:hover {
+  transform: translateY(-2px);
+}
+
+.scoring-result-card :deep(.el-card__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-bg-section);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.scoring-result-card :deep(.el-card__body) {
+  padding: var(--spacing-lg);
+}
+
+.scoring-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scoring-model-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+}
+
+.scoring-final-tag {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.scoring-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.scoring-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+}
+
+.scoring-label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.scoring-value {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.scoring-value--penalty {
+  color: var(--color-warning);
+}
+
+.scoring-penalties {
+  background: var(--color-warning-bg);
+  border-radius: var(--border-radius-base);
+  padding: var(--spacing-md);
+}
+
+.penalties-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-warning);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.penalty-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.penalty-metric {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.penalty-info {
+  color: var(--color-text-secondary);
+}
+
+.scoring-footer {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-lighter);
+}
+
+@media (max-width: 768px) {
+  .scoring-cards {
+    grid-template-columns: 1fr;
   }
 }
 </style>

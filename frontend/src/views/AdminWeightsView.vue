@@ -183,9 +183,10 @@
     <el-dialog
       v-model="tableDialogVisible"
       :title="dialogTitle"
-      width="900px"
+      width="1100px"
       :close-on-click-modal="false"
       align-center
+      class="weights-dialog"
     >
       <el-form
         ref="formRef"
@@ -193,29 +194,10 @@
         label-width="200px"
         label-position="top"
       >
+        <!-- Профессиональная область -->
         <el-form-item
-          v-if="!editingTable"
           label="Профессиональная область"
-          required
-        >
-          <el-card
-            shadow="never"
-            class="area-display-card"
-          >
-            <div class="selected-area">
-              <el-icon
-                :size="20"
-                class="icon-primary"
-              >
-                <Folder />
-              </el-icon>
-              <span class="area-name">{{ selectedActivityName }}</span>
-            </div>
-          </el-card>
-        </el-form-item>
-        <el-form-item
-          v-else
-          label="Профессиональная область"
+          :required="!editingTable"
         >
           <el-card
             shadow="never"
@@ -237,74 +219,251 @@
           Компетенции и веса
         </el-divider>
 
-        <div class="weights-editor">
-          <!-- Индикатор суммы весов -->
-          <el-alert
-            :type="weightSumAlertType"
-            :title="`Сумма весов: ${currentWeightSum.toFixed(4)} (требуется: 1.0000)`"
-            :closable="false"
-            show-icon
-            style="margin-bottom: 16px"
-          >
-            <template v-if="currentWeightSum !== 1.0">
-              <span v-if="currentWeightSum < 1.0">
-                Осталось распределить: {{ (1.0 - currentWeightSum).toFixed(4) }}
-              </span>
-              <span v-else>
-                Превышение: {{ (currentWeightSum - 1.0).toFixed(4) }}
-              </span>
-            </template>
-          </el-alert>
-
-          <!-- Список компетенций -->
-          <div
-            v-for="(weight, index) in tableForm.weights"
-            :key="index"
-            class="weight-row"
-          >
-            <el-select
-              v-model="weight.metric_code"
-              placeholder="Выберите метрику"
-              filterable
-              style="width: 420px"
+        <!-- Индикатор суммы весов - компактный прогресс-бар сверху -->
+        <div class="weight-sum-indicator">
+          <div class="weight-sum-header">
+            <span class="weight-sum-label">Сумма весов:</span>
+            <span class="weight-sum-value">{{ currentWeightSum.toFixed(2) }} / 1.00</span>
+            <span
+              v-if="Math.abs(currentWeightSum - 1.0) >= 0.0001"
+              class="weight-sum-remaining"
+              :class="{ 'is-over': currentWeightSum > 1.0 }"
             >
-              <el-option
-                v-for="metric in availableMetrics"
-                :key="metric.code"
-                :label="`${resolveMetricName(metric)} (${metric.code})`"
-                :value="metric.code"
-              />
-            </el-select>
+              <template v-if="currentWeightSum < 1.0">
+                Осталось: {{ (1.0 - currentWeightSum).toFixed(2) }}
+              </template>
+              <template v-else>
+                Превышение: {{ (currentWeightSum - 1.0).toFixed(2) }}
+              </template>
+            </span>
+          </div>
+          <el-progress
+            :percentage="Math.min(currentWeightSum * 100, 100)"
+            :stroke-width="8"
+            :show-text="false"
+            :status="weightSumProgressStatus"
+          />
+        </div>
 
-            <el-input-number
-              v-model="weight.weight"
-              :min="0"
-              :max="1"
-              :step="0.01"
-              :precision="4"
-              placeholder="Вес"
-              style="width: 180px"
-            />
-
+        <!-- Двухколоночный редактор -->
+        <div class="weights-editor-grid">
+          <!-- Левая колонка - Список компетенций -->
+          <div class="competency-list">
+            <div class="competency-list-header">
+              <span>Компетенции ({{ tableForm.weights.length }})</span>
+            </div>
+            <div class="competency-list-items">
+              <div
+                v-for="(weight, index) in tableForm.weights"
+                :key="index"
+                class="competency-list-item"
+                :class="{ 'is-selected': selectedWeightIndex === index }"
+                @click="selectWeight(index)"
+              >
+                <div class="competency-item-header">
+                  <span
+                    v-if="weight.is_critical"
+                    class="critical-icon"
+                    title="Критическая компетенция"
+                  >
+                    <el-icon color="var(--color-danger)"><Warning /></el-icon>
+                  </span>
+                  <span class="competency-name">{{ getWeightDisplayName(weight) }}</span>
+                  <span class="competency-weight">{{ (parseFloat(weight.weight) || 0).toFixed(2) }}</span>
+                  <span class="competency-percent">({{ ((parseFloat(weight.weight) || 0) * 100).toFixed(0) }}%)</span>
+                </div>
+                <el-progress
+                  :percentage="(parseFloat(weight.weight) || 0) * 100"
+                  :stroke-width="4"
+                  :show-text="false"
+                  :color="weight.is_critical ? 'var(--color-danger)' : 'var(--color-primary)'"
+                />
+              </div>
+              <div
+                v-if="tableForm.weights.length === 0"
+                class="competency-list-empty"
+              >
+                <el-text type="info">
+                  Нет компетенций
+                </el-text>
+              </div>
+            </div>
             <el-button
-              type="danger"
-              size="small"
-              :icon="Delete"
-              circle
-              @click="removeWeight(index)"
-            />
+              type="primary"
+              plain
+              :icon="Plus"
+              class="add-competency-btn"
+              @click="addWeight"
+            >
+              Добавить компетенцию
+            </el-button>
           </div>
 
-          <!-- Кнопка добавления компетенции -->
-          <el-button
-            type="primary"
-            plain
-            :icon="Plus"
-            style="margin-top: 16px"
-            @click="addWeight"
-          >
-            Добавить компетенцию
-          </el-button>
+          <!-- Правая колонка - Панель деталей -->
+          <div class="competency-detail">
+            <template v-if="selectedWeightIndex !== null && tableForm.weights[selectedWeightIndex]">
+              <div class="detail-header">
+                <h4 class="detail-title">{{ getWeightDisplayName(tableForm.weights[selectedWeightIndex]) || 'Новая компетенция' }}</h4>
+                <el-button
+                  type="danger"
+                  :icon="Delete"
+                  circle
+                  size="small"
+                  @click="removeWeight(selectedWeightIndex)"
+                />
+              </div>
+
+              <!-- Секция: Выбор компетенции -->
+              <div class="detail-section">
+                <label class="detail-label">Компетенция</label>
+                <el-select
+                  v-model="tableForm.weights[selectedWeightIndex].metric_code"
+                  placeholder="Поиск метрики..."
+                  filterable
+                  class="detail-select"
+                >
+                  <el-option
+                    v-for="metric in availableMetrics"
+                    :key="metric.code"
+                    :label="`${resolveMetricName(metric)} (${metric.code})`"
+                    :value="metric.code"
+                  />
+                </el-select>
+                <div
+                  v-if="tableForm.weights[selectedWeightIndex].metric_code"
+                  class="metric-code-hint"
+                >
+                  Код: {{ tableForm.weights[selectedWeightIndex].metric_code }}
+                </div>
+              </div>
+
+              <!-- Секция: Вес -->
+              <div class="detail-section">
+                <div class="detail-label-row">
+                  <label class="detail-label">Вес</label>
+                  <el-input-number
+                    v-model="tableForm.weights[selectedWeightIndex].weight"
+                    :min="0"
+                    :max="1"
+                    :step="0.01"
+                    :precision="2"
+                    size="small"
+                    class="weight-input"
+                  />
+                </div>
+                <el-slider
+                  v-model="tableForm.weights[selectedWeightIndex].weight"
+                  :min="0"
+                  :max="1"
+                  :step="0.01"
+                  :show-tooltip="false"
+                />
+                <div class="weight-actions">
+                  <span class="remaining-hint">Осталось распределить: {{ remainingWeight.toFixed(2) }}</span>
+                  <el-button
+                    v-if="remainingWeight > 0"
+                    type="primary"
+                    size="small"
+                    text
+                    @click="fillRemainingWeight"
+                  >
+                    Заполнить остаток
+                  </el-button>
+                </div>
+              </div>
+
+              <!-- Секция: Критичность -->
+              <div class="detail-section">
+                <div class="critical-toggle">
+                  <div class="critical-toggle-label">
+                    <el-icon color="var(--color-danger)"><Warning /></el-icon>
+                    <span>Критичность</span>
+                  </div>
+                  <el-switch
+                    v-model="tableForm.weights[selectedWeightIndex].is_critical"
+                    @change="onCriticalChange(tableForm.weights[selectedWeightIndex])"
+                  />
+                </div>
+
+                <!-- Параметры критичности -->
+                <div
+                  v-if="tableForm.weights[selectedWeightIndex].is_critical"
+                  class="critical-params"
+                >
+                  <!-- Штраф -->
+                  <div class="critical-param">
+                    <div class="detail-label-row">
+                      <label class="detail-label">Штраф за невыполнение</label>
+                      <el-input-number
+                        v-model="tableForm.weights[selectedWeightIndex].penalty"
+                        :min="0"
+                        :max="0.99"
+                        :step="0.05"
+                        :precision="2"
+                        size="small"
+                        class="penalty-input"
+                      />
+                    </div>
+                    <el-slider
+                      v-model="tableForm.weights[selectedWeightIndex].penalty"
+                      :min="0"
+                      :max="0.99"
+                      :step="0.01"
+                      :show-tooltip="false"
+                    />
+                  </div>
+
+                  <!-- Порог -->
+                  <div class="critical-param">
+                    <div class="detail-label-row">
+                      <label class="detail-label">Минимальный порог</label>
+                      <div class="threshold-value">
+                        <el-input-number
+                          v-model="tableForm.weights[selectedWeightIndex].threshold"
+                          :min="1"
+                          :max="10"
+                          :step="0.5"
+                          :precision="1"
+                          size="small"
+                          class="threshold-input"
+                        />
+                        <span class="threshold-unit">балл.</span>
+                      </div>
+                    </div>
+                    <el-slider
+                      v-model="tableForm.weights[selectedWeightIndex].threshold"
+                      :min="1"
+                      :max="10"
+                      :step="0.5"
+                      :show-tooltip="false"
+                    />
+                  </div>
+
+                  <div class="critical-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>Штраф применяется, если оценка ниже порога</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Пустое состояние -->
+            <div
+              v-else
+              class="detail-empty"
+            >
+              <el-icon
+                :size="48"
+                color="var(--color-gray-400)"
+              >
+                <Select />
+              </el-icon>
+              <p>Выберите компетенцию для редактирования</p>
+              <p class="detail-empty-hint">
+                или добавьте новую
+              </p>
+            </div>
+          </div>
         </div>
 
         <el-divider />
@@ -385,11 +544,12 @@
           <el-table-column
             type="index"
             label="#"
-            width="60"
+            width="50"
             align="center"
           />
           <el-table-column
             label="Метрика"
+            min-width="200"
           >
             <template #default="{ row }">
               <div class="metric-cell">
@@ -407,27 +567,89 @@
           <el-table-column
             prop="weight"
             label="Вес"
-            width="140"
+            width="100"
             align="center"
           >
             <template #default="{ row }">
               <el-tag size="large">
-                {{ parseFloat(row.weight).toFixed(4) }}
+                {{ parseFloat(row.weight).toFixed(2) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column
-            label="Процент"
-            width="140"
+            label="%"
+            width="80"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-text type="info">
+                {{ (parseFloat(row.weight) * 100).toFixed(0) }}%
+              </el-text>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="Критическая"
+            width="110"
             align="center"
           >
             <template #default="{ row }">
               <el-tag
-                type="info"
-                size="large"
+                v-if="row.is_critical"
+                type="danger"
+                size="small"
               >
-                {{ (parseFloat(row.weight) * 100).toFixed(2) }}%
+                Да
               </el-tag>
+              <el-text
+                v-else
+                type="info"
+                size="small"
+              >
+                —
+              </el-text>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="Штраф"
+            width="90"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.is_critical && parseFloat(row.penalty) > 0"
+                type="warning"
+                size="small"
+              >
+                {{ parseFloat(row.penalty).toFixed(2) }}
+              </el-tag>
+              <el-text
+                v-else
+                type="info"
+                size="small"
+              >
+                —
+              </el-text>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="Порог"
+            width="80"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-text
+                v-if="row.is_critical"
+                size="small"
+              >
+                &lt; {{ parseFloat(row.threshold).toFixed(1) }}
+              </el-text>
+              <el-text
+                v-else
+                type="info"
+                size="small"
+              >
+                —
+              </el-text>
             </template>
           </el-table-column>
         </el-table>
@@ -531,7 +753,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, View, FolderAdd, Folder, Search, RefreshRight } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, View, FolderAdd, Folder, Search, RefreshRight, Warning, InfoFilled, Select } from '@element-plus/icons-vue'
 import AppLayout from '@/components/AppLayout.vue'
 import { weightsApi } from '@/api/weights'
 import { profActivitiesApi } from '@/api/profActivities'
@@ -575,6 +797,7 @@ const profActivityDialogVisible = ref(false)
 const selectedTable = ref(null)
 const editingTable = ref(null)
 const editingProfActivity = ref(null)
+const selectedWeightIndex = ref(null)
 
 // Формы
 const formRef = ref(null)
@@ -641,6 +864,16 @@ const weightSumAlertType = computed(() => {
   return 'error'
 })
 
+const weightSumProgressStatus = computed(() => {
+  if (Math.abs(currentWeightSum.value - 1.0) < 0.0001) return 'success'
+  if (currentWeightSum.value > 1.0) return 'exception'
+  return ''
+})
+
+const remainingWeight = computed(() => {
+  return Math.max(0, 1.0 - currentWeightSum.value)
+})
+
 // Методы
 const loadWeightTables = async () => {
   try {
@@ -656,6 +889,7 @@ const loadWeightTables = async () => {
 
 const createTableForArea = (area) => {
   editingTable.value = null
+  selectedWeightIndex.value = null
   tableForm.value = {
     prof_activity_code: area.code,
     weights: [],
@@ -693,11 +927,15 @@ const loadMetrics = async () => {
 
 const editTable = (table) => {
   editingTable.value = table
+  selectedWeightIndex.value = table.weights.length > 0 ? 0 : null
   tableForm.value = {
     prof_activity_code: table.prof_activity_code,
     weights: table.weights.map(w => ({
       metric_code: w.metric_code,
-      weight: parseFloat(w.weight)
+      weight: parseFloat(w.weight),
+      is_critical: w.is_critical || false,
+      penalty: parseFloat(w.penalty) || 0,
+      threshold: parseFloat(w.threshold) || 6.0
     })),
     metadata: table.metadata || { description: '' }
   }
@@ -707,12 +945,50 @@ const editTable = (table) => {
 const addWeight = () => {
   tableForm.value.weights.push({
     metric_code: '',
-    weight: 0
+    weight: 0,
+    is_critical: false,
+    penalty: 0,
+    threshold: 6.0
   })
+  // Автоматически выбираем новую компетенцию
+  selectedWeightIndex.value = tableForm.value.weights.length - 1
+}
+
+const selectWeight = (index) => {
+  selectedWeightIndex.value = index
+}
+
+const getWeightDisplayName = (weight) => {
+  if (!weight.metric_code) return 'Не выбрана'
+  const metric = availableMetrics.value.find(m => m.code === weight.metric_code)
+  return resolveMetricName(metric, weight.metric_code)
+}
+
+const fillRemainingWeight = () => {
+  if (selectedWeightIndex.value !== null && tableForm.value.weights[selectedWeightIndex.value]) {
+    const currentWeight = parseFloat(tableForm.value.weights[selectedWeightIndex.value].weight) || 0
+    const remaining = 1.0 - currentWeightSum.value
+    tableForm.value.weights[selectedWeightIndex.value].weight = Math.min(1, currentWeight + remaining)
+  }
+}
+
+const onCriticalChange = (weight) => {
+  if (!weight.is_critical) {
+    weight.penalty = 0
+    weight.threshold = 6.0
+  }
 }
 
 const removeWeight = (index) => {
   tableForm.value.weights.splice(index, 1)
+  // Обновляем выбранный индекс
+  if (selectedWeightIndex.value === index) {
+    selectedWeightIndex.value = tableForm.value.weights.length > 0
+      ? Math.min(index, tableForm.value.weights.length - 1)
+      : null
+  } else if (selectedWeightIndex.value !== null && selectedWeightIndex.value > index) {
+    selectedWeightIndex.value--
+  }
 }
 
 const saveTable = async () => {
@@ -749,7 +1025,10 @@ const saveTable = async () => {
       prof_activity_code: tableForm.value.prof_activity_code,
       weights: tableForm.value.weights.map(w => ({
         metric_code: w.metric_code,
-        weight: parseFloat(w.weight)
+        weight: parseFloat(w.weight),
+        is_critical: w.is_critical || false,
+        penalty: w.is_critical ? parseFloat(w.penalty) || 0 : 0,
+        threshold: w.is_critical ? parseFloat(w.threshold) || 6.0 : 6.0
       })),
       metadata: tableForm.value.metadata.description ? tableForm.value.metadata : null
     }
@@ -869,7 +1148,10 @@ const enrichedWeights = (weights) => {
     return {
       ...w,
       metric_name: resolveMetricName(metric, w.metric_code),
-      metric_code: w.metric_code
+      metric_code: w.metric_code,
+      is_critical: w.is_critical || false,
+      penalty: w.penalty || 0,
+      threshold: w.threshold || 6.0
     }
   })
 }
@@ -1084,29 +1366,293 @@ onMounted(async () => {
   padding: var(--spacing-lg);
 }
 
-/* Weights Editor */
-.weights-editor {
-  padding: var(--spacing-xl);
-  background-color: var(--color-bg-section);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-light);
-}
-
-.weight-row {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-md);
+/* Weight Sum Indicator */
+.weight-sum-indicator {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--color-white);
   border-radius: var(--border-radius-base);
   border: 1px solid var(--color-border-light);
+}
+
+.weight-sum-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.weight-sum-label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-regular);
+}
+
+.weight-sum-value {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.weight-sum-remaining {
+  margin-left: auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+}
+
+.weight-sum-remaining.is-over {
+  color: var(--color-danger);
+}
+
+/* Weights Editor Grid - Two Column Layout */
+.weights-editor-grid {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  gap: var(--spacing-lg);
+  min-height: 400px;
+}
+
+/* Left Column - Competency List */
+.competency-list {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-section);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+  overflow: hidden;
+}
+
+.competency-list-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background-color: var(--color-white);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.competency-list-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.competency-list-item {
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+  background-color: var(--color-white);
+  border-radius: var(--border-radius-base);
+  border: 1px solid var(--color-border-lighter);
+  cursor: pointer;
   transition: var(--transition-fast);
 }
 
-.weight-row:hover {
-  border-color: var(--color-border);
-  box-shadow: var(--shadow-xs);
+.competency-list-item:hover {
+  border-color: var(--color-primary-lighter);
+  background-color: var(--color-primary-bg);
+}
+
+.competency-list-item.is-selected {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.competency-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.critical-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.competency-name {
+  flex: 1;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.competency-weight {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.competency-percent {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.competency-list-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-2xl);
+}
+
+.add-competency-btn {
+  margin: var(--spacing-md);
+}
+
+/* Right Column - Competency Detail */
+.competency-detail {
+  background-color: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.detail-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.detail-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.detail-label {
+  display: block;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-regular);
+  margin-bottom: var(--spacing-sm);
+}
+
+.detail-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.detail-label-row .detail-label {
+  margin-bottom: 0;
+}
+
+.detail-select {
+  width: 100%;
+}
+
+.metric-code-hint {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.weight-input {
+  width: 100px;
+}
+
+.weight-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--spacing-sm);
+}
+
+.remaining-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Critical Section */
+.critical-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-section);
+  border-radius: var(--border-radius-base);
+  margin-bottom: var(--spacing-md);
+}
+
+.critical-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.critical-params {
+  padding: var(--spacing-lg);
+  background-color: var(--color-danger-light);
+  border-radius: var(--border-radius-base);
+  border: 1px dashed var(--color-danger);
+}
+
+.critical-param {
+  margin-bottom: var(--spacing-lg);
+}
+
+.critical-param:last-of-type {
+  margin-bottom: var(--spacing-md);
+}
+
+.penalty-input,
+.threshold-input {
+  width: 90px;
+}
+
+.threshold-value {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.threshold-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.critical-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Empty State */
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.detail-empty p {
+  margin: var(--spacing-md) 0 0 0;
+  font-size: var(--font-size-base);
+}
+
+.detail-empty-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-placeholder);
+}
+
+/* Dialog specific */
+.weights-dialog :deep(.el-dialog__body) {
+  padding: var(--spacing-lg) var(--spacing-xl);
 }
 
 /* Table styling */
@@ -1172,6 +1718,19 @@ onMounted(async () => {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-lg);
+  }
+
+  .weights-editor-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .competency-list {
+    max-height: 250px;
+  }
+
+  .competency-detail {
+    min-height: 400px;
   }
 }
 </style>

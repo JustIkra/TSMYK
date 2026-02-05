@@ -278,6 +278,28 @@ class ReportPdfExtractionService:
 
         warning_msg, warning_details = _build_extract_warning(unknown_labels, ambiguous)
 
+        # 5. Trigger scoring recalculation for participant
+        if saved > 0:
+            try:
+                from app.services.scoring import ScoringService
+                scoring_service = ScoringService(self.db)
+                await scoring_service.recalculate_participant(participant_id)
+                logger.info(
+                    "scoring_recalculated_after_extraction",
+                    extra={
+                        "participant_id": str(participant_id),
+                        "report_id": str(report_id),
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "scoring_recalculation_failed",
+                    extra={
+                        "participant_id": str(participant_id),
+                        "error": str(e),
+                    },
+                )
+
         result = {
             "metrics_extracted": len(items),
             "metrics_saved": saved,
