@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -484,16 +484,16 @@ async def get_pending_metrics(
 
     # Count total
     count_result = await db.execute(
-        select(MetricDef)
+        select(func.count(MetricDef.id))
         .where(MetricDef.moderation_status == "PENDING")
     )
-    total = len(count_result.scalars().all())
+    total = count_result.scalar_one()
 
-    # Get paginated items
+    # Get paginated items (secondary sort by id for stable pagination)
     result = await db.execute(
         select(MetricDef)
         .where(MetricDef.moderation_status == "PENDING")
-        .order_by(MetricDef.sort_order.desc())
+        .order_by(MetricDef.sort_order.desc(), MetricDef.id)
         .limit(limit)
         .offset(offset)
     )
