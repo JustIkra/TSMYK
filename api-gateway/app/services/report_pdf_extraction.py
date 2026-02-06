@@ -169,18 +169,24 @@ class ReportPdfExtractionService:
         data = json.loads(text)
         items = _parse_pdf_metrics(data)
 
+        parsed_labels = [item["label"] for item in items]
         logger.info(
-            "pdf_metrics_parsed",
-            extra={"report_id": str(report_id), "raw_count": len(items)},
+            "pdf_metrics_parsed raw_count=%d labels=%s",
+            len(items),
+            parsed_labels,
+            extra={"report_id": str(report_id)},
         )
 
         # Pre-deduplicate semantically identical labels before RAG mapping
         dedup_service = SemanticDeduplicationService(self.db)
         try:
             items = await dedup_service.deduplicate_items(items)
+            deduped_labels = [item["label"] for item in items]
             logger.info(
-                "pdf_metrics_deduplicated",
-                extra={"report_id": str(report_id), "deduplicated_count": len(items)},
+                "pdf_metrics_deduplicated count=%d labels=%s",
+                len(items),
+                deduped_labels,
+                extra={"report_id": str(report_id)},
             )
         finally:
             await dedup_service.close()

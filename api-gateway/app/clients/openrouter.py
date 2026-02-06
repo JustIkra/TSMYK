@@ -446,7 +446,7 @@ class OpenRouterClient:
         """
         Generate text from PDF document using OpenRouter PDF Inputs.
 
-        Forces OpenRouter's file-parser plugin to use Mistral OCR engine.
+        Uses native engine — PDF is sent directly to the model without OCR.
         The entire PDF is sent as a base64-encoded file attachment.
 
         Args:
@@ -492,14 +492,7 @@ class OpenRouterClient:
             "messages": messages,
             "temperature": 0.1,  # Low temperature for consistent extraction
             "max_tokens": 8192,
-            "plugins": [
-                {
-                    "id": "file-parser",
-                    "pdf": {
-                        "engine": "mistral-ocr",
-                    },
-                },
-            ],
+            "plugins": [{"id": "file-parser", "pdf": {"engine": "native"}}],
         }
 
         if response_mime_type == "application/json":

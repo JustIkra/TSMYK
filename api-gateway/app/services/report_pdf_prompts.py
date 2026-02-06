@@ -35,7 +35,7 @@ def get_report_pdf_extraction_prompt(
         )
         template = template.replace(
             "{existing_metrics}",
-            f"\n\nСуществующие метрики в системе (используй эти названия при совпадении):\n{metrics_str}",
+            f"\n\nСуществующие метрики в системе (для справки, НЕ переименовывай — сопоставление автоматическое):\n{metrics_str}",
         )
     else:
         template = template.replace("{existing_metrics}", "")

@@ -85,8 +85,8 @@ async def test_generate_from_pdf_sends_correct_payload():
     expected_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
     assert file_part["file"]["file_data"] == f"data:application/pdf;base64,{expected_b64}"
 
-    # Verify PDF engine is forced to Mistral OCR
-    assert payload["plugins"] == [{"id": "file-parser", "pdf": {"engine": "mistral-ocr"}}]
+    # Verify PDF is sent directly to model via native engine (no OCR)
+    assert payload["plugins"] == [{"id": "file-parser", "pdf": {"engine": "native"}}]
 
     await client.close()
 

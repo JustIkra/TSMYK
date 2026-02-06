@@ -19,12 +19,15 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai_factory import AIClient, create_ai_client
 from app.core.config import settings
+from app.db.models import MetricDef, MetricSynonym
 from app.services.embedding import EmbeddingService
 from app.services.metric_mapping import get_metric_mapping_service
 from app.services.metric_mapping_llm_decision import (
@@ -53,6 +56,22 @@ def _norm(s: str) -> str:
         Normalized Title Case string
     """
     return re.sub(r"\s+", " ", s).strip().title()
+
+
+def _norm_synonym(s: str) -> str:
+    """
+    Normalize text for synonym comparison (case-insensitive, NFKC).
+
+    Unlike _norm() which uses Title Case for embedding similarity,
+    this uses lowercase for exact synonym matching.
+
+    Args:
+        s: Input string
+
+    Returns:
+        Normalized lowercase string
+    """
+    return unicodedata.normalize("NFKC", s.strip().lower())
 
 
 class RagMappingService:
@@ -90,6 +109,7 @@ class RagMappingService:
         self._ai_client = ai_client
         self.top_k = top_k or self.DEFAULT_TOP_K
         self.min_confidence = min_confidence or self.DEFAULT_MIN_CONFIDENCE
+        self._synonym_cache: dict[str, str] | None = None
 
     def _get_embedding_service(self) -> EmbeddingService:
         """Get or create embedding service."""
@@ -102,6 +122,42 @@ class RagMappingService:
         if self._ai_client is None:
             self._ai_client = create_ai_client()
         return self._ai_client
+
+    async def _load_synonyms(self) -> dict[str, str]:
+        """
+        Load synonym→metric_code mapping from DB (cached).
+
+        Loads all APPROVED metric synonyms and metric names as a lookup
+        dict keyed by normalized text. Cached for the lifetime of the service.
+
+        Returns:
+            Dict mapping normalized synonym text to metric code
+        """
+        if self._synonym_cache is not None:
+            return self._synonym_cache
+
+        cache: dict[str, str] = {}
+
+        # Load synonyms for APPROVED metrics
+        result = await self.db.execute(
+            select(MetricSynonym.synonym, MetricDef.code)
+            .join(MetricDef)
+            .where(MetricDef.moderation_status == "APPROVED")
+        )
+        for synonym_text, code in result.all():
+            cache[_norm_synonym(synonym_text)] = code
+
+        # Also load metric names themselves as "synonyms"
+        result = await self.db.execute(
+            select(MetricDef.name_ru, MetricDef.code)
+            .where(MetricDef.moderation_status == "APPROVED")
+        )
+        for name_ru, code in result.all():
+            if name_ru:
+                cache[_norm_synonym(name_ru)] = code
+
+        self._synonym_cache = cache
+        return cache
 
     def try_yaml_mapping(self, label: str) -> str | None:
         """
@@ -145,6 +201,24 @@ class RagMappingService:
             - llm_reason: Explanation from LLM
         """
         normalized_label = _norm(label)
+
+        # Step 0: Check synonym cache for exact match
+        synonyms = await self._load_synonyms()
+        norm_label_syn = _norm_synonym(label)
+        if norm_label_syn in synonyms:
+            code = synonyms[norm_label_syn]
+            logger.info(
+                "synonym_exact_match",
+                extra={"label": label, "code": code},
+            )
+            return {
+                "code": code,
+                "status": "mapped",
+                "source": "synonym",
+                "similarity": 1.0,
+                "candidates": [],
+                "llm_reason": f"Exact synonym match: {label}",
+            }
 
         # Step 1: Get candidates from RAG with minimum threshold
         embedding_service = self._get_embedding_service()
@@ -298,10 +372,42 @@ class RagMappingService:
         if not labels:
             return []
 
-        # Normalize all labels
-        normalized_labels = [_norm(label) for label in labels]
+        # Step 0: Check synonym cache for exact matches
+        synonyms = await self._load_synonyms()
+        results: list[dict[str, Any]] = []
+        remaining_indices: list[int] = []
+        remaining_labels: list[str] = []
 
-        # Step 1: Generate embeddings for all labels in one batch
+        for i, label in enumerate(labels):
+            norm_label_syn = _norm_synonym(label)
+            if norm_label_syn in synonyms:
+                code = synonyms[norm_label_syn]
+                logger.info(
+                    "batch_synonym_exact_match",
+                    extra={"label": label, "code": code},
+                )
+                results.append({
+                    "label": label,
+                    "code": code,
+                    "status": "mapped",
+                    "source": "synonym",
+                    "similarity": 1.0,
+                    "candidates": [],
+                    "llm_reason": f"Exact synonym match: {label}",
+                })
+            else:
+                results.append(None)  # type: ignore[arg-type]  # placeholder
+                remaining_indices.append(i)
+                remaining_labels.append(label)
+
+        # If all matched by synonym, return early
+        if not remaining_labels:
+            return results
+
+        # Normalize remaining labels
+        normalized_labels = [_norm(label) for label in remaining_labels]
+
+        # Step 1: Generate embeddings for remaining labels in one batch
         embedding_service = self._get_embedding_service()
         ai_client = self._get_ai_client()
 
@@ -310,24 +416,18 @@ class RagMappingService:
         except Exception as e:
             logger.error(
                 "batch_embeddings_failed",
-                extra={"labels_count": len(labels), "error": str(e)},
+                extra={"labels_count": len(remaining_labels), "error": str(e)},
             )
-            # Fallback to sequential processing
-            results = []
-            for label in labels:
+            # Fallback to sequential processing for remaining labels
+            for idx, label in zip(remaining_indices, remaining_labels):
                 result = await self.map_label(label)
                 result["label"] = label
-                results.append(result)
+                results[idx] = result
             return results
 
-        # Step 2: Find candidates for each embedding and prepare LLM items
-        candidate_min_threshold = settings.rag_candidate_min_threshold
-        auto_match_threshold = settings.rag_auto_match_threshold
-
-        llm_items: list[dict[str, Any]] = []
-        item_indices: list[int] = []  # Track which items need LLM decision
-        results: list[dict[str, Any]] = [
-            {
+        # Initialize placeholders for remaining labels
+        for idx, label in zip(remaining_indices, remaining_labels):
+            results[idx] = {
                 "label": label,
                 "code": None,
                 "status": "unknown",
@@ -336,12 +436,18 @@ class RagMappingService:
                 "candidates": [],
                 "llm_reason": "No candidates available",
             }
-            for label in labels
-        ]
 
-        for i, (label, normalized_label, embedding) in enumerate(
-            zip(labels, normalized_labels, embeddings)
+        # Step 2: Find candidates for each embedding and prepare LLM items
+        candidate_min_threshold = settings.rag_candidate_min_threshold
+        auto_match_threshold = settings.rag_auto_match_threshold
+
+        llm_items: list[dict[str, Any]] = []
+        llm_result_indices: list[int] = []  # Track which result slots need LLM decision
+
+        for j, (label, normalized_label, embedding) in enumerate(
+            zip(remaining_labels, normalized_labels, embeddings)
         ):
+            idx = remaining_indices[j]
             try:
                 # Find similar using pre-computed embedding with minimum threshold
                 candidates = await embedding_service.find_similar_by_embedding(
@@ -381,7 +487,7 @@ class RagMappingService:
                         "similarity": best["similarity"],
                     },
                 )
-                results[i] = {
+                results[idx] = {
                     "label": label,
                     "code": best["code"],
                     "status": "mapped",
@@ -393,8 +499,8 @@ class RagMappingService:
             else:
                 # Need LLM decision
                 llm_items.append({"label": label, "candidates": candidates})
-                item_indices.append(i)
-                results[i]["candidates"] = candidates[:5]
+                llm_result_indices.append(idx)
+                results[idx]["candidates"] = candidates[:5]
 
         # Step 3: Use batch LLM decision for all items with candidates
         if llm_items:
@@ -406,7 +512,7 @@ class RagMappingService:
                 )
 
                 # Apply decisions to results
-                for j, (idx, decision) in enumerate(zip(item_indices, decisions)):
+                for idx, decision in zip(llm_result_indices, decisions):
                     results[idx]["code"] = decision["code"]
                     results[idx]["status"] = decision["status"]
                     results[idx]["source"] = "llm" if decision["code"] else None
@@ -419,13 +525,13 @@ class RagMappingService:
                     extra={"items_count": len(llm_items), "error": str(e)},
                 )
                 # Mark all items with candidates as unknown on error
-                for idx in item_indices:
+                for idx in llm_result_indices:
                     results[idx]["llm_reason"] = f"LLM decision error: {str(e)}"
 
         # Log summary
         mapped_count = sum(1 for r in results if r["status"] == "mapped")
-        ambiguous_count = sum(1 for r in results if r["status"] == "ambiguous")
-        unknown_count = sum(1 for r in results if r["status"] == "unknown")
+        ambiguous_count = sum(1 for r in results if r.get("status") == "ambiguous")
+        unknown_count = sum(1 for r in results if r.get("status") == "unknown")
 
         logger.info(
             "batch_mapping_completed",

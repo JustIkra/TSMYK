@@ -963,6 +963,17 @@ class MetricGenerationService:
         if result.scalars().first():
             return False
 
+        # Check if synonym collides with another metric's name
+        if await self._synonym_collides_with_metric(synonym_normalized, exclude_metric_id=metric_def_id):
+            logger.warning(
+                "synonym_collides_with_metric_name",
+                extra={
+                    "metric_def_id": str(metric_def_id),
+                    "synonym": synonym_normalized,
+                },
+            )
+            return False
+
         # Add new synonym with savepoint protection
         new_synonym = MetricSynonym(
             metric_def_id=metric_def_id,
@@ -986,6 +997,189 @@ class MetricGenerationService:
             logger.debug(f"Synonym '{synonym_normalized}' already exists (concurrent insert)")
             await self.db.rollback()
             return False
+
+    # ==================== Validation Helpers ====================
+
+    async def _synonym_collides_with_metric(
+        self,
+        synonym_text: str,
+        exclude_metric_id: uuid.UUID | None = None,
+    ) -> bool:
+        """
+        Check if a synonym text collides with an existing metric name.
+
+        A collision means the synonym matches the name or name_ru of a
+        *different* MetricDef (case-insensitive). Adding it would create
+        ambiguity in the mapping.
+
+        Args:
+            synonym_text: Text to check
+            exclude_metric_id: Metric ID to exclude from collision check
+                (the metric the synonym would be added to)
+
+        Returns:
+            True if synonym collides with another metric's name
+        """
+        import unicodedata
+
+        norm = unicodedata.normalize("NFKC", synonym_text.lower().strip())
+
+        result = await self.db.execute(
+            select(MetricDef.id, MetricDef.name, MetricDef.name_ru, MetricDef.code)
+        )
+        rows = result.all()
+
+        for row_id, name, name_ru, _code in rows:
+            if exclude_metric_id and row_id == exclude_metric_id:
+                continue
+            if name and unicodedata.normalize("NFKC", name.lower().strip()) == norm:
+                return True
+            if name_ru and unicodedata.normalize("NFKC", name_ru.lower().strip()) == norm:
+                return True
+
+        return False
+
+    # ==================== Unmatched Metrics Processing ====================
+
+    async def process_unmatched_metrics(
+        self,
+        task_id: str,
+        unmatched_labels: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Process unmatched metric labels from report extraction.
+
+        For each unmatched label:
+        - unknown_label: try semantic match → add synonym if matched, else create PENDING MetricDef
+        - evidence_missing_value: create PENDING MetricDef with unverified note
+
+        Uses safe logging keys to avoid colliding with LogRecord reserved attributes.
+        Counters are incremented AFTER all operations succeed to ensure accuracy.
+
+        Args:
+            task_id: Task ID for logging context
+            unmatched_labels: List of dicts with 'label', 'value', 'error_type', optional 'quotes'
+
+        Returns:
+            Result dict with metrics_created, metrics_matched, synonyms_added, errors
+        """
+        result: dict[str, Any] = {
+            "metrics_created": 0,
+            "metrics_matched": 0,
+            "synonyms_added": 0,
+            "errors": [],
+        }
+
+        if not unmatched_labels:
+            return result
+
+        existing_metrics = await self.get_existing_metrics()
+        existing_synonyms = await self.get_existing_synonyms()
+
+        for item in unmatched_labels:
+            label = item.get("label", "")
+            value = item.get("value")
+            error_type = item.get("error_type", "unknown_label")
+
+            try:
+                # Step 0: Try exact name/synonym match first (fast path)
+                metric_data = ExtractedMetricData(name=label, value=float(value) if value else None)
+                exact_match = await self.match_existing_metric(
+                    metric_data, existing_metrics, existing_synonyms
+                )
+
+                if exact_match:
+                    added = await self._add_synonym_if_new(exact_match.id, label)
+                    logger.info(
+                        "unmatched_metric_exact_match",
+                        extra={
+                            "task_id": task_id,
+                            "label": label,
+                            "matched_code": exact_match.code,
+                            "synonym_added": added,
+                        },
+                    )
+                    result["metrics_matched"] += 1
+                    if added:
+                        result["synonyms_added"] += 1
+                    continue
+
+                if error_type == "unknown_label":
+                    # Try semantic match (slower but smarter)
+                    matched, similarity = await self.match_metric_semantic(metric_data)
+
+                    if matched:
+                        # Add as synonym to help future matching
+                        added = await self._add_synonym_if_new(matched.id, label)
+
+                        # Safe logging key: "metric_created" not "created"
+                        logger.info(
+                            "unmatched_metric_matched",
+                            extra={
+                                "task_id": task_id,
+                                "label": label,
+                                "matched_code": matched.code,
+                                "similarity": similarity,
+                                "synonym_added": added,
+                            },
+                        )
+                        # Increment AFTER logging (spec requirement B)
+                        result["metrics_matched"] += 1
+                        if added:
+                            result["synonyms_added"] += 1
+                    else:
+                        # No match — create PENDING MetricDef
+                        new_metric, was_created = await self.get_or_create_pending_metric(metric_data)
+
+                        logger.info(
+                            "unmatched_metric_created",
+                            extra={
+                                "task_id": task_id,
+                                "label": label,
+                                "metric_code": new_metric.code,
+                                "was_created": was_created,
+                            },
+                        )
+                        if was_created:
+                            result["metrics_created"] += 1
+                        else:
+                            result["metrics_matched"] += 1
+
+                elif error_type == "evidence_missing_value":
+                    # Create PENDING MetricDef with unverified note
+                    quotes = item.get("quotes", [])
+                    description = f"Не подтверждено (evidence_missing_value). Цитаты: {'; '.join(quotes)}" if quotes else "Не подтверждено (evidence_missing_value)"
+                    metric_data = ExtractedMetricData(
+                        name=label,
+                        value=float(value) if value else None,
+                        description=description,
+                    )
+                    new_metric, was_created = await self.get_or_create_pending_metric(metric_data)
+
+                    logger.info(
+                        "unmatched_evidence_missing_created",
+                        extra={
+                            "task_id": task_id,
+                            "label": label,
+                            "metric_code": new_metric.code,
+                            "was_created": was_created,
+                        },
+                    )
+                    if was_created:
+                        result["metrics_created"] += 1
+                    else:
+                        result["metrics_matched"] += 1
+
+            except Exception as e:
+                logger.warning(
+                    "unmatched_metric_processing_error",
+                    extra={"task_id": task_id, "label": label, "error": str(e)},
+                    exc_info=True,
+                )
+                result["errors"].append(f"Error processing '{label}': {str(e)}")
+
+        await self.db.commit()
+        return result
 
     # ==================== Main Processing ====================
 
