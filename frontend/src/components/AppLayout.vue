@@ -22,6 +22,11 @@
             <span>Участники</span>
           </el-menu-item>
 
+          <el-menu-item index="/organizations">
+            <el-icon><OfficeBuilding /></el-icon>
+            <span>Организации</span>
+          </el-menu-item>
+
           <el-sub-menu
             v-if="authStore.isAdmin"
             index="admin"
@@ -88,7 +93,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, UserFilled, Setting, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { User, UserFilled, Setting, ArrowDown, SwitchButton, OfficeBuilding } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores'
 
 const router = useRouter()

@@ -9,8 +9,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import Participant
 from app.repositories.participant import ParticipantRepository
 from app.schemas.participant import (
+    DepartmentBrief,
     ParticipantCreateRequest,
     ParticipantListResponse,
     ParticipantResponse,
@@ -26,6 +28,27 @@ class ParticipantService:
         self.db = db
         self.repo = ParticipantRepository(db)
 
+    @staticmethod
+    def _to_response(p: Participant) -> ParticipantResponse:
+        """Build ParticipantResponse with department_info from eagerly loaded relationships."""
+        dept_info = None
+        if p.department is not None:
+            dept_info = DepartmentBrief(
+                id=p.department.id,
+                name=p.department.name,
+                organization_id=p.department.organization_id,
+                organization_name=p.department.organization.name if p.department.organization else "",
+            )
+        return ParticipantResponse(
+            id=p.id,
+            full_name=p.full_name,
+            birth_date=p.birth_date,
+            external_id=p.external_id,
+            department_id=p.department_id,
+            department_info=dept_info,
+            created_at=p.created_at,
+        )
+
     async def create_participant(self, request: ParticipantCreateRequest) -> ParticipantResponse:
         """
         Create a new participant.
@@ -40,8 +63,11 @@ class ParticipantService:
             full_name=request.full_name,
             birth_date=request.birth_date,
             external_id=request.external_id,
+            department_id=getattr(request, 'department_id', None),
         )
-        return ParticipantResponse.model_validate(participant)
+        # Re-fetch to eagerly load department+organization
+        participant = await self.repo.get_by_id(participant.id)
+        return self._to_response(participant)
 
     async def get_participant(self, participant_id: UUID) -> ParticipantResponse | None:
         """
@@ -56,7 +82,7 @@ class ParticipantService:
         participant = await self.repo.get_by_id(participant_id)
         if not participant:
             return None
-        return ParticipantResponse.model_validate(participant)
+        return self._to_response(participant)
 
     async def update_participant(
         self, participant_id: UUID, request: ParticipantUpdateRequest
@@ -77,10 +103,13 @@ class ParticipantService:
             full_name=request.full_name,
             birth_date=request.birth_date,
             external_id=request.external_id,
+            department_id=getattr(request, 'department_id', None),
         )
         if not participant:
             return None
-        return ParticipantResponse.model_validate(participant)
+        # Re-fetch to eagerly load department+organization
+        participant = await self.repo.get_by_id(participant.id)
+        return self._to_response(participant)
 
     async def delete_participant(self, participant_id: UUID) -> bool:
         """
@@ -117,7 +146,7 @@ class ParticipantService:
             size=params.size,
         )
 
-        items = [ParticipantResponse.model_validate(p) for p in participants]
+        items = [self._to_response(p) for p in participants]
 
         pages = ceil(total / params.size) if total > 0 else 0
 

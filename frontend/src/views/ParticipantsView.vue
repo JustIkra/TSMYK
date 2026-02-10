@@ -58,14 +58,38 @@
           table-layout="fixed"
         >
           <el-table-column
-            prop="full_name"
             label="ФИО"
-          />
+            min-width="200"
+          >
+            <template #default="{ row }">
+              <el-link
+                type="primary"
+                :underline="false"
+                @click="viewParticipant(row.id)"
+              >
+                {{ row.full_name }}
+              </el-link>
+            </template>
+          </el-table-column>
           <el-table-column
-            prop="birth_date"
-            label="Дата рождения"
-            width="150"
-          />
+            label="Организация / Отдел"
+            min-width="200"
+          >
+            <template #default="{ row }">
+              <template v-if="row.department_info">
+                <el-link
+                  type="default"
+                  :underline="false"
+                  @click="router.push(`/organizations/${row.department_info.organization_id}`)"
+                >
+                  {{ row.department_info.organization_name }}
+                </el-link>
+                <span class="org-separator"> / </span>
+                <span class="dept-name-text">{{ row.department_info.name }}</span>
+              </template>
+              <span v-else class="no-org-text">—</span>
+            </template>
+          </el-table-column>
           <el-table-column
             prop="external_id"
             label="Внешний ID"
@@ -109,16 +133,40 @@
             class="participant-card"
           >
             <div class="participant-card__name">
-              {{ participant.full_name }}
+              <el-link
+                type="primary"
+                :underline="false"
+                @click="viewParticipant(participant.id)"
+              >
+                {{ participant.full_name }}
+              </el-link>
             </div>
             <div class="participant-card__info">
               <div class="participant-card__field">
                 <span class="field-label">ID:</span>
                 <span class="field-value">{{ participant.external_id || '—' }}</span>
               </div>
-              <div class="participant-card__field">
-                <span class="field-label">Дата рождения:</span>
-                <span class="field-value">{{ participant.birth_date || '—' }}</span>
+              <div
+                v-if="participant.department_info"
+                class="participant-card__field"
+              >
+                <span class="field-label">Организация:</span>
+                <span class="field-value">
+                  <el-link
+                    type="default"
+                    :underline="false"
+                    @click="router.push(`/organizations/${participant.department_info.organization_id}`)"
+                  >
+                    {{ participant.department_info.organization_name }}
+                  </el-link>
+                </span>
+              </div>
+              <div
+                v-if="participant.department_info"
+                class="participant-card__field"
+              >
+                <span class="field-label">Отдел:</span>
+                <span class="field-value">{{ participant.department_info.name }}</span>
               </div>
             </div>
             <div class="participant-card__actions">
@@ -405,6 +453,21 @@ onMounted(() => {
 
 .table-card :deep(.el-table__body tr:hover > td.el-table__cell) {
   background-color: var(--color-bg-hover);
+}
+
+/* Organization/Department column */
+.org-separator {
+  color: var(--color-text-placeholder);
+  margin: 0 2px;
+}
+
+.dept-name-text {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.no-org-text {
+  color: var(--color-text-placeholder);
 }
 
 /* Actions Group */

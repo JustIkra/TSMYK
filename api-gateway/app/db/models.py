@@ -79,6 +79,53 @@ class User(Base):
         return f"<User(id={self.id}, email={self.email}, role={self.role}, status={self.status})>"
 
 
+# Organization Table
+class Organization(Base):
+    __tablename__ = "organization"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default="now()"
+    )
+
+    departments: Mapped[list["Department"]] = relationship(
+        "Department", back_populates="organization", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Organization(id={self.id}, name={self.name})>"
+
+
+# Department Table
+class Department(Base):
+    __tablename__ = "department"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organization.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default="now()"
+    )
+
+    organization: Mapped["Organization"] = relationship("Organization", back_populates="departments")
+    participants: Mapped[list["Participant"]] = relationship(
+        "Participant", back_populates="department"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_department_org_name"),
+        Index("ix_department_organization_id", "organization_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Department(id={self.id}, name={self.name}, organization_id={self.organization_id})>"
+
+
 # Participant Table
 class Participant(Base):
     """
@@ -93,6 +140,9 @@ class Participant(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("department.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default="now()"
     )
@@ -101,6 +151,7 @@ class Participant(Base):
     reports: Mapped[list["Report"]] = relationship(
         "Report", back_populates="participant", cascade="all, delete-orphan"
     )
+    department: Mapped["Department | None"] = relationship("Department", back_populates="participants")
 
     def __repr__(self) -> str:
         return f"<Participant(id={self.id}, full_name={self.full_name})>"

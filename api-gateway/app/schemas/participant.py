@@ -19,6 +19,7 @@ class ParticipantCreateRequest(BaseModel):
     )
     birth_date: date | None = Field(None, description="Birth date (optional)")
     external_id: str | None = Field(None, max_length=100, description="External ID (optional)")
+    department_id: UUID | None = Field(None, description="Department ID (optional)")
 
 
 class ParticipantUpdateRequest(BaseModel):
@@ -27,6 +28,7 @@ class ParticipantUpdateRequest(BaseModel):
     full_name: str | None = Field(None, min_length=1, max_length=255, description="Full name")
     birth_date: date | None = Field(None, description="Birth date")
     external_id: str | None = Field(None, max_length=100, description="External ID")
+    department_id: UUID | None = Field(None, description="Department ID")
 
 
 class ParticipantSearchParams(BaseModel):
@@ -40,6 +42,16 @@ class ParticipantSearchParams(BaseModel):
 
 # Response Schemas
 
+class DepartmentBrief(BaseModel):
+    """Brief department info for embedding in participant responses."""
+    id: UUID
+    name: str
+    organization_id: UUID
+    organization_name: str
+
+    model_config = {"from_attributes": True}
+
+
 class ParticipantResponse(BaseModel):
     """Response schema for a single participant."""
 
@@ -47,6 +59,8 @@ class ParticipantResponse(BaseModel):
     full_name: str
     birth_date: date | None
     external_id: str | None
+    department_id: UUID | None = None
+    department_info: DepartmentBrief | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

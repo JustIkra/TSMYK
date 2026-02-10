@@ -9,8 +9,9 @@ from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.db.models import Participant
+from app.db.models import Department, Participant
 
 # PostgreSQL running with default C locale does not downcase Cyrillic characters when using ILIKE.
 # We normalize case via translate() so substring searches behave consistently for Cyrillic and Latin.
@@ -25,7 +26,11 @@ class ParticipantRepository:
         self.db = db
 
     async def create(
-        self, full_name: str, birth_date: date | None = None, external_id: str | None = None
+        self,
+        full_name: str,
+        birth_date: date | None = None,
+        external_id: str | None = None,
+        department_id: "UUID | None" = None,
     ) -> Participant:
         """
         Create a new participant.
@@ -34,12 +39,13 @@ class ParticipantRepository:
             full_name: Full name of the participant
             birth_date: Optional birth date
             external_id: Optional external ID
+            department_id: Optional department ID
 
         Returns:
             Created Participant instance
         """
         participant = Participant(
-            full_name=full_name, birth_date=birth_date, external_id=external_id
+            full_name=full_name, birth_date=birth_date, external_id=external_id, department_id=department_id
         )
         self.db.add(participant)
         await self.db.commit()
@@ -56,7 +62,11 @@ class ParticipantRepository:
         Returns:
             Participant if found, None otherwise
         """
-        result = await self.db.execute(select(Participant).where(Participant.id == participant_id))
+        result = await self.db.execute(
+            select(Participant)
+            .options(selectinload(Participant.department).selectinload(Department.organization))
+            .where(Participant.id == participant_id)
+        )
         return result.scalar_one_or_none()
 
     async def update(
@@ -65,6 +75,7 @@ class ParticipantRepository:
         full_name: str | None = None,
         birth_date: date | None = None,
         external_id: str | None = None,
+        department_id: UUID | None = None,
     ) -> Participant | None:
         """
         Update a participant.
@@ -88,6 +99,8 @@ class ParticipantRepository:
             participant.birth_date = birth_date
         if external_id is not None:
             participant.external_id = external_id
+        if department_id is not None:
+            participant.department_id = department_id
 
         await self.db.commit()
         await self.db.refresh(participant)
@@ -136,7 +149,9 @@ class ParticipantRepository:
         Returns:
             Tuple of (list of participants, total count)
         """
-        stmt = select(Participant)
+        stmt = select(Participant).options(
+            selectinload(Participant.department).selectinload(Department.organization)
+        )
 
         filters = []
 
