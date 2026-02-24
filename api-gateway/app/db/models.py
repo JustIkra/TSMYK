@@ -33,6 +33,7 @@ except ImportError:
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import settings
 from app.db.base import Base
 
 
@@ -711,10 +712,9 @@ class MetricEmbedding(Base):
         nullable=False,
         unique=True,
     )
-    # Vector column - 1536 dimensions for text-embedding-3-small
-    # Using raw SQL type annotation since pgvector may not be installed in all envs
+    # Vector column - dimensions from EMBEDDING_DIMENSIONS env var
     embedding = mapped_column(
-        Vector(1536) if Vector else Text,
+        Vector(settings.embedding_dimensions) if Vector else Text,
         nullable=False,
     )
     indexed_text: Mapped[str] = mapped_column(Text, nullable=False)
