@@ -248,48 +248,95 @@ class EmbeddingService:
 
     async def index_all_metrics(self, batch_size: int = 50) -> dict[str, int]:
         """
-        Index all APPROVED metrics.
+        Index all APPROVED metrics using batch embedding API calls.
 
         Args:
-            batch_size: Number of metrics to process before committing
+            batch_size: Number of metrics per batch API call
 
         Returns:
             Summary dict with indexed, errors, and total counts
         """
-        # Get all APPROVED metric IDs
+        # Load all APPROVED metrics with their synonyms in bulk
         result = await self.db.execute(
-            select(MetricDef.id).where(MetricDef.moderation_status == "APPROVED")
+            select(MetricDef).where(MetricDef.moderation_status == "APPROVED")
         )
-        metric_ids = [row[0] for row in result.all()]
+        metrics = list(result.scalars().all())
+        total = len(metrics)
+
+        if not total:
+            return {"indexed": 0, "errors": 0, "total": 0}
+
+        # Load all synonyms in one query
+        metric_ids = [m.id for m in metrics]
+        syn_result = await self.db.execute(
+            select(MetricSynonym.metric_def_id, MetricSynonym.synonym)
+            .where(MetricSynonym.metric_def_id.in_(metric_ids))
+        )
+        synonyms_map: dict[uuid.UUID, list[str]] = {}
+        for row in syn_result.all():
+            synonyms_map.setdefault(row[0], []).append(row[1])
+
+        # Load existing embeddings to do upsert
+        emb_result = await self.db.execute(
+            select(MetricEmbedding).where(MetricEmbedding.metric_def_id.in_(metric_ids))
+        )
+        existing_map = {e.metric_def_id: e for e in emb_result.scalars().all()}
 
         indexed = 0
         errors = 0
-        total = len(metric_ids)
 
         logger.info(
             "index_all_metrics_started",
-            extra={"total_metrics": total},
+            extra={"total_metrics": total, "batch_size": batch_size},
         )
 
-        for i, metric_id in enumerate(metric_ids):
+        # Process in batches
+        for batch_start in range(0, total, batch_size):
+            batch = metrics[batch_start:batch_start + batch_size]
+            texts = [
+                self._build_index_text(m, synonyms_map.get(m.id, []))
+                for m in batch
+            ]
+
             try:
-                await self.index_metric(metric_id)
-                indexed += 1
-
-                # Commit in batches
-                if (i + 1) % batch_size == 0:
-                    await self.db.commit()
-                    logger.debug(f"Committed batch {(i + 1) // batch_size}")
-
+                embeddings = await self.generate_embeddings(texts)
             except Exception as e:
                 logger.error(
-                    "index_metric_failed",
-                    extra={"metric_id": str(metric_id), "error": str(e)},
+                    "batch_embedding_failed",
+                    extra={"batch_start": batch_start, "error": str(e)},
                 )
-                errors += 1
+                errors += len(batch)
+                continue
 
-        # Final commit
-        await self.db.commit()
+            for metric, embedding, index_text in zip(batch, embeddings, texts):
+                try:
+                    existing = existing_map.get(metric.id)
+                    if existing:
+                        existing.embedding = embedding
+                        existing.indexed_text = index_text
+                        existing.model = settings.embedding_model
+                        existing.indexed_at = datetime.now(timezone.utc)
+                    else:
+                        new_emb = MetricEmbedding(
+                            metric_def_id=metric.id,
+                            embedding=embedding,
+                            indexed_text=index_text,
+                            model=settings.embedding_model,
+                        )
+                        self.db.add(new_emb)
+                    indexed += 1
+                except Exception as e:
+                    logger.error(
+                        "index_metric_failed",
+                        extra={"metric_id": str(metric.id), "error": str(e)},
+                    )
+                    errors += 1
+
+            await self.db.commit()
+            logger.info(
+                "batch_indexed",
+                extra={"batch": batch_start // batch_size + 1, "indexed_so_far": indexed},
+            )
 
         logger.info(
             "index_all_metrics_completed",
